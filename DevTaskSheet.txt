@@ -1,0 +1,550 @@
+DEVELOPER TASK SHEET
+Social Group Buying E-Commerce Platform
+Client: Sahil Srivastava  |  Prepared By: ArgosMob Tech & AI Pvt Ltd
+April 2026  |  Stack: Node.js / React.js / PostgreSQL / Redis
+P1 — Critical / Core Logic
+P2 — Important Feature
+P3 — Enhancement / Polish
+Build Order: Backend First, Then Frontend
+How to Use This Sheet
+Read before starting development
+This task sheet is organized in the order you should build things: Backend API first, Frontend second. Each task row tells you exactly what to build, what logic to implement, and what to watch out for. Do not start a frontend task until its corresponding backend API is tested and working.
+Column
+Meaning
+Task ID
+Unique ID to reference in commits and PR descriptions (e.g. BE-01, FE-03)
+Task / Module
+The feature or module name
+What to Build
+Exact API routes, logic, validations, and DB operations to implement
+Priority
+P1 = must-have for the platform to function, P2 = important feature, P3 = polish
+Notes / Dependencies
+What must exist before this task can start, or key implementation warnings
+Phase 0 — Database Schema & Project Setup
+Do this before writing any API code
+Task ID
+Task / Module
+What to Build
+Priority
+Notes / Dependencies
+DB-01
+Project Scaffolding
+Initialize Node.js + Express project
+Set up folder structure: /routes, /controllers, /models, /middleware, /utils
+Configure .env for DB_URL, JWT_SECRET, RAZORPAY_KEY, WHATSAPP_TOKEN etc.
+Install core packages: express, pg, redis, jsonwebtoken, bcrypt, dotenv, axios
+P1
+Day 1 setup — nothing runs without this
+DB-02
+PostgreSQL Schema — Users
+Table: users (id, name, email, phone, password_hash, role ENUM[user/seller/admin], is_verified, created_at)
+role column must default to 'user'
+phone must be UNIQUE — used for OTP login
+Index on email and phone for fast lookups
+P1
+All other tables FK to users.id
+DB-03
+PostgreSQL Schema — Products & Categories
+Table: categories (id, name, commission_pct, created_at)
+Table: products (id, seller_id FK, category_id FK, name, description, images JSONB, sku, stock, status ENUM[pending/active/rejected], created_at)
+Table: product_tiers (id, product_id FK, group_size INT, price DECIMAL) — 5 rows per product (1,2,3,5,10)
+P1
+product_tiers is the pricing engine. Must be seeded for every product
+DB-04
+PostgreSQL Schema — Groups & Members
+Table: groups (id, product_id FK, creator_id FK, target_size INT, current_size INT DEFAULT 0, status ENUM[active/complete/expired/cancelled], timer_end TIMESTAMPTZ, extension_used BOOLEAN DEFAULT false, created_at)
+Table: group_members (id, group_id FK, user_id FK, joined_at) — UNIQUE(group_id, user_id)
+Index on groups.status and groups.timer_end for the expiry cron job
+P1
+Core of the platform. current_size must stay in sync via triggers or app logic
+DB-05
+PostgreSQL Schema — Orders & Payments
+Table: orders (id, group_id FK, buyer_id FK, seller_id FK, product_id FK, quantity INT, unit_price DECIMAL, total_amount DECIMAL, status ENUM[pending/confirmed/shipped/delivered/cancelled/refunded], razorpay_order_id, razorpay_payment_id, created_at)
+Table: payment_preauth (id, order_id FK, razorpay_order_id, status ENUM[authorized/captured/voided], authorized_at, captured_at, voided_at)
+P1
+payment_preauth is separate from orders — tracks the hold lifecycle
+DB-06
+PostgreSQL Schema — Sellers & Notifications
+Table: seller_profiles (id, user_id FK UNIQUE, business_name, gstin, bank_account, ifsc, is_approved BOOLEAN DEFAULT false)
+Table: notification_log (id, user_id FK, type VARCHAR, channel ENUM[whatsapp/push/email], payload JSONB, status ENUM[sent/failed], sent_at)
+P2
+notification_log helps admin debug delivery failures
+DB-07
+Redis Setup
+Connect Redis client in app
+Use Redis for: group timer countdowns (key: group:{id}:timer), session tokens, real-time member count cache
+Set TTL on group timer keys to match 24h expiry
+P1
+Redis is mandatory — PostgreSQL alone cannot handle real-time timer updates
+Phase 1 — Backend: Authentication & User Management
+JWT + OTP based auth
+Task ID
+Task / Module
+What to Build
+Priority
+Notes / Dependencies
+BE-01
+OTP Send
+POST /api/auth/send-otp
+Accepts: { phone }
+Generate 6-digit OTP, store in Redis with key otp:{phone} and TTL 10 mins
+Send via MSG91 or Twilio SMS API
+Return: { message: 'OTP sent' }
+P1
+Rate-limit: max 3 requests per phone per 10 mins
+BE-02
+OTP Verify + JWT Issue
+POST /api/auth/verify-otp
+Accepts: { phone, otp }
+Verify OTP from Redis — delete after successful match
+If user exists: return JWT. If new user: create user record first, then return JWT
+JWT payload: { userId, role, phone } — expiry 7 days
+Return: { token, user: { id, name, phone, role } }
+P1
+JWT secret must be in .env — never hardcode
+BE-03
+Auth Middleware
+Middleware: verifyToken(req, res, next)
+Extract Bearer token from Authorization header
+Verify JWT, attach decoded user to req.user
+Return 401 if missing/invalid/expired
+Middleware: requireRole(role) — returns 403 if req.user.role !== role
+P1
+All protected routes must use verifyToken. Admin routes must also use requireRole('admin')
+BE-04
+User Profile
+GET /api/user/profile — return logged-in user's details
+PUT /api/user/profile — update name, email (not phone)
+P2
+Phone is immutable — used as login identifier
+Phase 2 — Backend: Products, Categories & Seller Panel
+Task ID
+Task / Module
+What to Build
+Priority
+Notes / Dependencies
+BE-05
+Category CRUD (Admin)
+POST /api/admin/categories — create category with commission_pct
+GET /api/categories — public list (for product listing form)
+PUT /api/admin/categories/:id — edit
+DELETE /api/admin/categories/:id — only if no products assigned
+P2
+Admin-only write routes
+BE-06
+Seller Registration
+POST /api/seller/register
+Creates seller_profiles record linked to user
+Sets is_approved = false
+Sends email notification to admin (via SendGrid)
+User role remains 'user' until admin approves
+P1
+Seller cannot list products until is_approved = true
+BE-07
+Admin: Approve / Suspend Seller
+PUT /api/admin/sellers/:id/approve — sets is_approved=true, updates user.role to 'seller'
+PUT /api/admin/sellers/:id/suspend — sets is_approved=false, role back to 'user'
+GET /api/admin/sellers — list all with approval status and sales stats
+P1
+Role change must happen atomically with approval status
+BE-08
+Product Listing (Seller)
+POST /api/seller/products
+Accepts: name, description, images[], category_id, sku, stock, tiers[{group_size, price}]
+Validate: must include all 5 tiers (1,2,3,5,10)
+Validate: tier prices must be descending (solo > duo > trio > team > best)
+Set status = 'pending' on create
+Return: created product with tier prices
+P1
+Strict tier validation — reject if any tier is missing or prices are not decreasing
+BE-09
+Admin: Approve / Reject Products
+PUT /api/admin/products/:id/approve — status = 'active'
+PUT /api/admin/products/:id/reject — status = 'rejected', accepts reason field
+GET /api/admin/products?status=pending — list pending approvals
+P1
+Only active products should appear in public listing
+BE-10
+Product Listing (Public)
+GET /api/products — paginated list, filter by category, sort by price/popularity
+GET /api/products/:id — full detail with all tier prices and active group count
+Only return products with status = 'active'
+P1
+Include active_groups count in product detail response — frontend needs this
+BE-11
+Seller Inventory & Order Management
+PUT /api/seller/products/:id — edit stock, description, images
+GET /api/seller/orders — orders assigned to this seller, with status filter
+PUT /api/seller/orders/:id/ship — update status to 'shipped', add courier_name and tracking_number
+P2
+Sellers cannot change prices after product is active — prices are locked
+Phase 3 — Backend: Group Buying Engine
+Most complex backend module — build carefully
+WARNING: This is the most business-critical backend module. The group engine must handle concurrent joins, timer expiry, payment pre-authorization, and state transitions atomically. Use database transactions everywhere in this module.
+Task ID
+Task / Module
+What to Build
+Priority
+Notes / Dependencies
+BE-12
+Create Group
+POST /api/groups/create
+Accepts: { product_id, target_size } — target_size must be one of [2,3,5,10]
+Validate product is active and not out of stock
+Insert into groups: status='active', timer_end = NOW() + 24h
+Add creator as first group_member
+Set current_size = 1
+Store timer in Redis: SET group:{id}:timer {unix_timestamp} EX 86400
+Generate shareable invite URL: /join/{group_id}
+Return: { group_id, invite_url, timer_end, tier_price }
+P1
+creator is automatically joined — do not make them re-join
+BE-13
+Join Group
+POST /api/groups/:id/join
+Check: group status must be 'active'
+Check: timer_end must be in the future (check both DB and Redis)
+Check: user not already in group — UNIQUE constraint on group_members
+Check: current_size < target_size
+Insert into group_members
+Increment groups.current_size by 1 (use atomic UPDATE SET current_size = current_size + 1)
+If current_size === target_size: trigger Group Completion flow (see BE-14)
+Else: send WhatsApp notification to group creator (new member joined)
+Update Redis member count cache
+P1
+CRITICAL: Use a DB transaction wrapping the size increment + completion trigger to prevent race conditions
+BE-14
+Group Completion Flow
+Triggered internally when current_size === target_size
+Set groups.status = 'complete'
+Capture payment pre-authorization for ALL members simultaneously
+Create orders for all members with status='confirmed'
+Send WhatsApp blast to all members: 'Your group is complete! Order confirmed.'
+Send push notification to all members
+Do NOT expose this as a public API — it is called internally from BE-13
+P1
+Payment capture must be in a try-catch — if capture fails for any member, log error and flag for manual admin review
+BE-15
+Group Status / Real-Time Poll
+GET /api/groups/:id/status
+Return: { current_size, target_size, status, timer_remaining_seconds, members_count, tier_price }
+timer_remaining_seconds: fetch from Redis, fall back to DB timer_end - NOW() if Redis key missing
+Frontend will poll this every 5-10 seconds for live updates
+P1
+This endpoint will be hit frequently — keep it lightweight, read from Redis cache where possible
+BE-16
+Extend Timer
+POST /api/groups/:id/extend-timer
+Only group creator can call this (verify req.user.id === groups.creator_id)
+Check: extension_used must be false
+Extend timer_end by configurable duration (default: +12 hours)
+Set extension_used = true
+Update Redis TTL: EXPIRE group:{id}:timer {new_seconds}
+Send WhatsApp notification to all current group members
+P2
+Extension duration should be configurable from admin settings, not hardcoded
+BE-17
+Cancel Group
+POST /api/groups/:id/cancel
+Only creator can cancel — verify ownership
+Only possible when status = 'active'
+Set status = 'cancelled'
+Void all payment pre-authorizations for all members
+Send WhatsApp notification to all members: 'Group cancelled, payment hold released'
+Delete Redis timer key
+P1
+Payment void must happen before status update — if void fails, do not mark as cancelled
+BE-18
+Group Expiry Cron Job
+Scheduled job: runs every 5 minutes
+Query: SELECT * FROM groups WHERE status='active' AND timer_end < NOW()
+For each expired group:
+  Set status = 'expired'
+  Void all payment pre-authorizations
+  Send push notification to all members
+  Delete Redis timer key
+Use node-cron or a dedicated worker process
+Log every expiry action in notification_log
+P1
+This cron is critical — without it, expired groups will never close. Test thoroughly with short timers in dev
+BE-19
+Admin: Manual Group Completion
+POST /api/admin/groups/:id/force-complete
+Admin can override an expired or stalled group and mark it complete
+Capture payment for all existing members regardless of target size
+Set status = 'complete'
+Log admin action with admin_id and timestamp in audit trail
+P2
+Audit log is mandatory — admin overrides must be traceable
+Phase 4 — Backend: Payment Gateway (Razorpay Pre-Auth)
+Task ID
+Task / Module
+What to Build
+Priority
+Notes / Dependencies
+BE-20
+Create Payment Order (Pre-Auth)
+POST /api/payments/create-order
+Accepts: { group_id }
+Calculate amount from product_tiers based on group's target_size
+Call Razorpay Orders API: create order with payment_capture = 0 (pre-auth mode)
+Store razorpay_order_id in payment_preauth table with status='authorized'
+Return: { razorpay_order_id, amount, key_id } — frontend uses this to open Razorpay modal
+P1
+payment_capture=0 is the key flag for pre-auth. Double-check Razorpay docs for pre-auth flow
+BE-21
+Capture Payment (on Group Complete)
+Internal function: capturePayment(razorpay_order_id, amount)
+Calls Razorpay Capture API
+On success: update payment_preauth.status = 'captured', set captured_at
+Update order.status = 'confirmed'
+On failure: log error, flag order for admin review
+P1
+Called from Group Completion Flow (BE-14), never directly by user
+BE-22
+Void Payment Authorization
+Internal function: voidPayment(razorpay_order_id)
+Calls Razorpay void/refund API
+On success: update payment_preauth.status = 'voided', set voided_at
+On failure: log and alert admin — do not silently fail
+P1
+Called from Group Cancel (BE-17) and Expiry Cron (BE-18)
+BE-23
+Razorpay Webhook Handler
+POST /api/webhooks/razorpay
+Verify webhook signature using Razorpay webhook secret
+Handle events: payment.authorized, payment.captured, payment.failed, refund.created
+Update order and payment_preauth records based on webhook event
+This is the source of truth — keep DB in sync with Razorpay
+P1
+Webhook endpoint must be public (no JWT auth). Verify signature before processing — never trust raw webhook data
+BE-24
+COD Order Flow
+POST /api/orders/cod
+For Cash on Delivery: skip pre-auth flow entirely
+Validate pincode against allowed COD pincodes list (store in DB or config file)
+Create order directly with status='confirmed', no payment_preauth record
+COD orders count toward group completion the same as paid orders
+P2
+COD pincodes list must be manageable from admin panel
+Phase 5 — Backend: Notifications (WhatsApp + Push + Email)
+Task ID
+Task / Module
+What to Build
+Priority
+Notes / Dependencies
+BE-25
+WhatsApp Notification Service
+Create utility: sendWhatsApp(phone, templateName, params[])
+Use Meta WhatsApp Business API or Twilio
+Templates needed (register in Meta dashboard before dev):
+  group_invite — product name, discount, invite link
+  member_joined — member count, target count
+  group_complete — product name, order ID
+  timer_expiry_1hr — timer warning
+  timer_extended — new timer duration
+  group_cancelled — payment release confirmation
+Log every send attempt in notification_log table
+P1
+WhatsApp templates MUST be pre-approved by Meta before use. Build the service first, integrate templates once approved
+BE-26
+Push Notification Service
+Create utility: sendPush(userId, title, body, data{})
+Use Firebase FCM
+Store FCM device token on login (add fcm_token column to users table)
+Handle token refresh — update token in DB on each login
+P2
+FCM is free — prioritize this over email for group events
+BE-27
+Email Service
+Create utility: sendEmail(to, subject, templateName, data{})
+Use SendGrid or Mailgun
+Email templates needed: order_confirmed (with GST invoice), order_shipped (tracking info), new_seller_registration (for admin)
+P2
+Emails are secondary to WhatsApp for this platform — do not block core flow on email failures
+Phase 6 — Backend: Admin Panel APIs
+Task ID
+Task / Module
+What to Build
+Priority
+Notes / Dependencies
+BE-28
+Admin Dashboard Stats
+GET /api/admin/dashboard
+Return: active_groups count, completed_deals today/week/month, total_revenue, new_users today/week, pending_products count, pending_sellers count
+Cache response in Redis for 60 seconds — do not run heavy queries on every page load
+P2
+All admin routes must use verifyToken + requireRole('admin')
+BE-29
+Admin Order Management
+GET /api/admin/orders — all orders with filters: status, seller_id, date range, search by order_id
+GET /api/admin/orders/:id — full order detail
+POST /api/admin/orders/:id/refund — trigger manual refund via Razorpay
+P2
+Refund must update order.status to 'refunded' and log action
+BE-30
+Coupon / Promo Management
+POST /api/admin/coupons — create coupon: code, discount_type (flat/pct), discount_value, expiry, max_uses
+GET /api/admin/coupons — list with usage count
+DELETE /api/admin/coupons/:id — deactivate
+POST /api/coupons/apply — user endpoint: validate and apply coupon to group order
+P3
+Build after core group flow is working
+BE-31
+Commission Configuration
+PUT /api/admin/categories/:id/commission — update commission_pct
+Commission is deducted from seller payout at order completion
+Store commission snapshot on each order at time of capture — not live rate
+P3
+Commission snapshot prevents retrospective changes affecting existing orders
+Phase 7 — Frontend: React.js Web Application
+Start only after backend APIs are tested
+Tech: React.js + Tailwind CSS. All API calls via axios. Use React Context or Zustand for auth state. Use React Query or SWR for data fetching + caching. Use socket.io or polling every 5 seconds for real-time group updates.
+Task ID
+Task / Module
+What to Build
+Priority
+Notes / Dependencies
+FE-01
+Project Setup & Routing
+Create React app with Vite
+Install: tailwindcss, axios, react-router-dom, zustand or context API
+Set up routes: /, /products, /products/:id, /groups/:id, /join/:group_id, /checkout, /orders, /seller/*, /admin/*
+Set up axios base URL from .env
+Auth context: store JWT, user object, login/logout functions
+P1
+Protected route wrapper needed for /seller/* and /admin/* paths
+FE-02
+OTP Login Flow
+Login modal / page: phone number input → send OTP → 6-digit OTP input → verify
+On success: store JWT in localStorage or httpOnly cookie
+Auto-redirect after login based on user role (user→home, seller→seller dashboard, admin→admin panel)
+Show OTP resend button after 30 seconds
+P1
+Use phone number formatting for Indian numbers (+91 prefix)
+FE-03
+Product Listing Page
+Grid layout with product cards
+Each card: image, name, solo price, best group price, active groups badge
+Filter bar: category filter, price range
+Pagination (20 products per page)
+Clicking a card → Product Detail page
+P1
+Show both solo price and 'Best Group Price' prominently — this is the key conversion hook
+FE-04
+Product Detail Page
+Hero image gallery
+Tier pricing table: show all 5 tiers with discount % highlighted
+Active groups section: list of open groups user can join, with member count and timer
+Two CTAs: 'Start a Team' and 'Join Existing Team'
+Stock availability display
+P1
+The tier pricing table is the most important UI element on this page
+FE-05
+Group Creation & Invite Page
+Post-creation screen: show group link, countdown timer (live), member slots (filled/empty)
+WhatsApp share button: opens wa.me with pre-filled invite text containing group link
+Copy link button
+Real-time member join updates (poll BE-15 every 5s)
+Extend Timer button (visible only to creator, grayed out if already used)
+Cancel Group button (creator only)
+P1
+Timer display must be HH:MM:SS counting down live — use setInterval on the client, sync from server every 30s
+FE-06
+Join Group Page (/join/:group_id)
+Accessed via WhatsApp invite link — must work for non-logged-in users
+Show product details, current group size, timer, and the price they'll pay
+Prompt login if not authenticated
+After login: auto-complete the join action
+If group is full/expired: show appropriate message with CTA to start new group
+P1
+This page is the viral entry point. It must be fast, clean, and work without prior context
+FE-07
+Checkout & Payment
+Checkout page: order summary, address input, payment method selection (UPI/Card/COD)
+For UPI/Card: call BE-20 to get razorpay_order_id, then open Razorpay checkout JS modal
+On payment success callback: call backend to confirm pre-auth, then redirect to order confirmation
+For COD: direct order creation via BE-24
+Coupon code input field (calls BE-30 apply coupon)
+P1
+Use Razorpay's official checkout.js — do not build custom payment UI
+FE-08
+Order Tracking Page
+List of user's orders with status badges
+Order detail: product info, group info, payment status, shipping tracking number + courier name
+Status timeline: Confirmed → Shipped → Delivered
+P2
+—
+FE-09
+Seller Dashboard
+Stats cards: total revenue, active groups, completed orders, pending approvals
+Products table with add/edit/stock management
+Orders table with filter by status — ship button that opens tracking input modal
+Registration / onboarding form for new sellers (GSTIN, bank details)
+P2
+Accessible only to users with role='seller' and is_approved=true
+FE-10
+Admin Panel
+Dashboard with stats (from BE-28)
+Seller approval queue: list with Approve / Suspend buttons
+Product approval queue: list with Approve / Reject buttons
+Active groups table: with Force Complete button per group
+Orders management table with manual refund option
+Category and commission management
+User management: search, view, ban
+P2
+Admin panel is internal — prioritize function over design polish
+FE-11
+SEO & Meta Tags
+Add react-helmet or vite-plugin-ssg for dynamic meta tags
+Product pages: unique title, description, og:image from product images
+Canonical URLs on all pages
+robots.txt and sitemap.xml
+P3
+Build last — all core features must be complete first
+Phase 8 — Testing & Deployment Checklist
+Task ID
+Task / Module
+What to Build
+Priority
+Notes / Dependencies
+QA-01
+Backend API Testing
+Use Postman or Insomnia — create a collection with all API routes
+Test the full group lifecycle: create → join → complete (with 2-person group) → payment capture
+Test expiry cron: create group with 2-min timer, verify auto-expiry and void
+Test edge cases: duplicate join, join expired group, overfull group
+P1
+Do not move to frontend until all P1 backend tests pass
+QA-02
+Razorpay Integration Test
+Test in Razorpay Test Mode first — use test card numbers
+Verify pre-auth hold appears in Razorpay dashboard
+Verify capture on group completion
+Verify void on cancellation and expiry
+Test webhook delivery using Razorpay's test webhook tool
+P1
+Switch to live keys only after full QA sign-off
+QA-03
+Deployment
+Backend: deploy Node.js on AWS EC2 or DigitalOcean Droplet with PM2
+Frontend: deploy React on Vercel or Netlify (or serve as static from EC2)
+PostgreSQL: use AWS RDS or managed DigitalOcean DB
+Redis: use Upstash (serverless) or ElastiCache
+Configure SSL via Let's Encrypt (Certbot)
+Set all environment variables in production — never commit .env to Git
+Set up GitHub Actions or simple CI/CD pipeline
+P1
+Use separate environments: development, staging, production
+QA-04
+Performance & Security Checks
+Add rate limiting on all public endpoints (express-rate-limit)
+Add Helmet.js for HTTP security headers
+Sanitize all user inputs (express-validator)
+Verify no sensitive data in API responses (no password_hash, no full card numbers)
+Test page load speed — product listing and detail pages must load under 3s
+P2
+OWASP Top 10 compliance is stated in the BRD — at minimum cover SQL injection, XSS, auth issues
+Development Order Summary
+DB-01 to DB-07 (Schema) → BE-01 to BE-04 (Auth) → BE-05 to BE-11 (Products/Sellers) → BE-12 to BE-19 (Group Engine) → BE-20 to BE-24 (Payments) → BE-25 to BE-27 (Notifications) → BE-28 to BE-31 (Admin APIs) → QA-01, QA-02 (Backend QA) → FE-01 to FE-11 (Frontend) → QA-03, QA-04 (Deploy & Security)

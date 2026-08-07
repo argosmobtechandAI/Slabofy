@@ -1,0 +1,28 @@
+# Server Config
+PORT=5000
+NODE_ENV=development
+
+# Database Config (PostgreSQL)
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/socialgroup
+
+# Redis Config
+REDIS_URL=redis://localhost:6379
+
+# JWT Config
+JWT_SECRET=supersecretjwtkeychangeinprod
+
+# Razorpay Keys
+RAZORPAY_KEY_ID=rzp_test_YOURKEYHERE
+RAZORPAY_KEY_SECRET=your_razorpay_secret_here
+RAZORPAY_WEBHOOK_SECRET=your_webhook_secret_here
+
+# WhatsApp Meta API Keys
+WHATSAPP_TOKEN=your_whatsapp_meta_token_here
+WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
+
+# Push Notifications (Firebase FCM)
+FCM_SERVER_KEY=your_fcm_server_key_here
+
+# Email Gateway (SendGrid / Mailgun)
+SENDGRID_API_KEY=your_sendgrid_key_here
+EMAIL_FROM=noreply@socialgroupbuying.com
