@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState } from 'react';
+import useScrollReveal from '../hooks/useScrollReveal';
 import { Link } from 'react-router-dom';
 import { Users, ArrowUpRight, Flame, Zap } from 'lucide-react';
 
 export default function ProductCard({ product }) {
   const [hovered, setHovered] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const revealRef = useScrollReveal({ persist: false });
 
   let images = [];
   try { images = typeof product.images === 'string' ? JSON.parse(product.images) : (product.images || []); }
@@ -25,6 +27,7 @@ export default function ProductCard({ product }) {
   };
 
   return (
+    <div ref={revealRef} className="scroll-reveal-group" style={{ height: '100%' }}>
     <Link
       to={`/product/${product.id}`}
       style={{ textDecoration: 'none', display: 'block', height: '100%' }}
@@ -161,5 +164,6 @@ export default function ProductCard({ product }) {
         </div>
       </div>
     </Link>
+    </div>
   );
 }

@@ -56,11 +56,25 @@ CREATE TABLE IF NOT EXISTS products (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     images JSONB DEFAULT '[]'::jsonb,
+    videos JSONB DEFAULT '[]'::jsonb,
     sku VARCHAR(100) UNIQUE,
     stock INT NOT NULL DEFAULT 0,
+    max_group_size INT NOT NULL DEFAULT 10,
+    group_window_hours INT NOT NULL DEFAULT 24,
     status product_status DEFAULT 'pending',
     reject_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3a. Product Variants Table
+CREATE TABLE IF NOT EXISTS product_variants (
+    id SERIAL PRIMARY KEY,
+    product_id INT REFERENCES products(id) ON DELETE CASCADE,
+    color VARCHAR(100),
+    size VARCHAR(50),
+    stock INT NOT NULL DEFAULT 0,
+    image_url TEXT,
+    UNIQUE(product_id, color, size)
 );
 
 -- 4. Product Tiers Table (Engine for pricing discount based on group size: 1, 2, 3, 5, 10)
@@ -107,6 +121,9 @@ CREATE TABLE IF NOT EXISTS orders (
     unit_price DECIMAL(10,2) NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
     commission_pct DECIMAL(5,2) NOT NULL, -- Commission snapshotted at capture
+    variant_id INT REFERENCES product_variants(id) ON DELETE SET NULL,
+    color VARCHAR(100),
+    size VARCHAR(50),
     status order_status DEFAULT 'pending',
     razorpay_order_id VARCHAR(255),
     razorpay_payment_id VARCHAR(255),
@@ -133,7 +150,12 @@ CREATE TABLE IF NOT EXISTS seller_profiles (
     id SERIAL PRIMARY KEY,
     user_id INT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     business_name VARCHAR(255) NOT NULL,
-    gstin VARCHAR(15),
+    business_type VARCHAR(50),
+    business_address TEXT,
+    gstin VARCHAR(20),
+    pan_number VARCHAR(10),
+    aadhar_number VARCHAR(12),
+    kyc_document_url VARCHAR(255),
     bank_account VARCHAR(30),
     ifsc VARCHAR(11),
     is_approved BOOLEAN DEFAULT false,
@@ -173,7 +195,7 @@ INSERT INTO categories (name, commission_pct) VALUES
 ON CONFLICT DO NOTHING;
 
 -- Seed Default Admin User
--- Password: adminpassword123 (bcrypt hash: $2a$10$wEPlUqUjS7UfDkS5P8b/Aeb4JkUj6kE94H57J5n98859942700010)
+-- Password: adminpassword123 (bcrypt hash: $2a$10$zBBjDRWC6O9ydIb1ypAhU.I8GZ1rkodjaVg/NvV7RaRomcmj2lVGW)
 INSERT INTO users (name, email, phone, password_hash, role, is_verified) VALUES
-('System Administrator', 'admin@socialgroupbuying.com', '+919999999999', '$2a$10$wEPlUqUjS7UfDkS5P8b/Aeb4JkUj6kE94H57J5n98859942700010', 'admin', true)
+('System Administrator', 'admin@slabofy.com', '+919999999999', '$2a$10$zBBjDRWC6O9ydIb1ypAhU.I8GZ1rkodjaVg/NvV7RaRomcmj2lVGW', 'admin', true)
 ON CONFLICT (phone) DO NOTHING;

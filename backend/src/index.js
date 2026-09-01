@@ -8,7 +8,9 @@ import adminRoutes from './routes/admin.js';
 import groupRoutes from './routes/groups.js';
 import paymentRoutes from './routes/payments.js';
 import couponRoutes from './routes/coupons.js';
+import uploadRoutes from './routes/upload.js';
 import { getCategories } from './controllers/admin.js';
+import path from 'path';
 import { initExpiryCron } from './cron/expiry.js';
 
 dotenv.config();
@@ -24,6 +26,9 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Serve static uploaded files
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Public health check route
 app.get('/health', (req, res) => {
@@ -41,6 +46,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/coupons', couponRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
@@ -59,7 +65,7 @@ initExpiryCron();
 // Start Server
 app.listen(PORT, () => {
   console.log(`====================================================`);
-  console.log(`Social Group Buying Backend running on Port: ${PORT}`);
+  console.log(`Slabofy Backend running on Port: ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`====================================================`);
 });

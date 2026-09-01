@@ -6,6 +6,8 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { Users, Share2, AlertTriangle, CheckCircle, RefreshCw, Calendar, Ban, Zap, ChevronLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
+import OTPLoginModal from '../components/OTPLoginModal';
+import useScrollReveal from '../hooks/useScrollReveal';
 
 const TOTAL_DURATION = 24 * 3600; // 24h in seconds — used for ring calc
 
@@ -64,6 +66,9 @@ export default function GroupRoom() {
 
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [checkingAuth, setCheckingAuth] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const revealRef = useScrollReveal();
   const [error, setError] = useState(null);
   const [timeLeft, setTimeLeft] = useState(0);
 
@@ -139,7 +144,7 @@ export default function GroupRoom() {
   };
 
   const handleJoinDirectly = () => {
-    if (!isLoggedIn) { toast.error('Please log in first'); return; }
+    if (!isLoggedIn) { setLoginModalOpen(true); return; }
     navigate('/checkout', { state: { product_id: group.product_id, group_id: group.group_id, target_size: group.target_size } });
   };
 
@@ -168,9 +173,18 @@ export default function GroupRoom() {
   const slotsRemaining = group.target_size - group.current_size;
   const progressPct = Math.round((group.current_size / group.target_size) * 100);
   const STATUS_TOTAL = group.timer_remaining_seconds > 0 ? TOTAL_DURATION : 1;
+  const statusColor = group.timer_remaining_seconds < 3600 ? '#f05035' : '#5b21b6';
 
   return (
-    <div style={{ background: '#faf8f4', minHeight: '100vh' }}>
+    <div className="mesh-violet" style={{ minHeight: '100vh', padding: '0 0 60px', position: 'relative' }}>
+      <OTPLoginModal 
+        isOpen={loginModalOpen} 
+        onClose={() => setLoginModalOpen(false)}
+        onSuccess={() => {
+          setLoginModalOpen(false);
+          handleJoinDirectly();
+        }}
+      />
 
       {/* Breadcrumb */}
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 24px 0' }}>
@@ -181,11 +195,11 @@ export default function GroupRoom() {
         </Link>
       </div>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 24px 64px' }}>
+      <div ref={revealRef} className="scroll-reveal-group" style={{ maxWidth: 680, margin: '0 auto', padding: '24px 24px 64px' }}>
 
         {/* Status Banner */}
         {group.status === 'complete' && (
-          <div style={{ background: 'linear-gradient(135deg, rgba(5,150,105,0.08), rgba(5,150,105,0.04))', border: '1px solid rgba(5,150,105,0.2)', borderRadius: 20, padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 28 }}>
+          <div style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(5,150,105,0.2)', borderRadius: 20, padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 28 }}>
             <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(5,150,105,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <CheckCircle size={22} color="#059669" />
             </div>
@@ -198,7 +212,7 @@ export default function GroupRoom() {
         )}
 
         {group.status === 'expired' && (
-          <div style={{ background: 'rgba(240,80,53,0.06)', border: '1px solid rgba(240,80,53,0.2)', borderRadius: 20, padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 28 }}>
+          <div style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(240,80,53,0.2)', borderRadius: 20, padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 28 }}>
             <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(240,80,53,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <AlertTriangle size={22} color="#f05035" />
             </div>
@@ -210,7 +224,7 @@ export default function GroupRoom() {
         )}
 
         {group.status === 'cancelled' && (
-          <div style={{ background: 'rgba(225,29,72,0.06)', border: '1px solid rgba(225,29,72,0.2)', borderRadius: 20, padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 28 }}>
+          <div style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(225,29,72,0.2)', borderRadius: 20, padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 28 }}>
             <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(225,29,72,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <Ban size={22} color="#e11d48" />
             </div>
@@ -228,19 +242,19 @@ export default function GroupRoom() {
         }}>
 
           {/* Product header bar */}
-          <div style={{ background: '#12100e', padding: '28px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{ background: 'linear-gradient(135deg, #f7f5fd, #fff)', borderBottom: '1px solid rgba(18,16,14,0.06)', padding: '28px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 6 }}>
                 CO-BUY DEAL ROOM
               </div>
-              <h1 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.2rem, 2.5vw, 1.6rem)', color: '#faf8f4', letterSpacing: '-0.03em', margin: 0 }}>
+              <h1 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.2rem, 2.5vw, 1.6rem)', color: '#12100e', letterSpacing: '-0.03em', margin: 0 }}>
                 {group.product_name}
               </h1>
               {group.tier_price && (
                 <div style={{ marginTop: 8, fontSize: '0.82rem', color: '#6b6560', fontWeight: 600 }}>
                   Group Price: <span style={{ color: '#f59e0b', fontWeight: 800 }}>{fmt(group.tier_price)}</span>
                   {group.original_price && (
-                    <span style={{ color: '#4a4642', textDecoration: 'line-through', marginLeft: 10, fontWeight: 500 }}>{fmt(group.original_price)}</span>
+                    <span style={{ color: '#a09a94', textDecoration: 'line-through', marginLeft: 10, fontWeight: 500 }}>{fmt(group.original_price)}</span>
                   )}
                 </div>
               )}
@@ -249,12 +263,10 @@ export default function GroupRoom() {
             {/* Circular Timer (active only) */}
             {group.status === 'active' && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <CircularTimer remaining={timeLeft} total={STATUS_TOTAL} />
-                {group.original_price && (
-                  <div style={{ fontSize: '0.65rem', color: '#f05035', fontWeight: 700, textAlign: 'center', maxWidth: 180 }}>
-                    ⚠️ Resets to {fmt(group.original_price)} at zero
-                  </div>
-                )}
+                <div style={{ position: 'relative', width: 64, height: 64, borderRadius: '50%', background: '#fff', boxShadow: '0 4px 16px rgba(18,16,14,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CircularTimer remaining={timeLeft} total={STATUS_TOTAL} />
+                  <div style={{ position: 'absolute', inset: -4, borderRadius: '50%', border: '1px solid rgba(91,33,182,0.1)', animation: 'pulse-ring 2s infinite' }} />
+                </div>
               </div>
             )}
           </div>
@@ -271,11 +283,10 @@ export default function GroupRoom() {
                 </span>
               </div>
               <div style={{ background: '#f2ede4', borderRadius: 99, height: 12, overflow: 'hidden', position: 'relative' }}>
-                <div style={{
+                <div className="progress-bar-animated" style={{
                   height: '100%', borderRadius: 99,
                   background: group.status === 'complete' ? 'linear-gradient(90deg, #059669, #0ea5e9)' : 'linear-gradient(90deg, #5b21b6, #f05035)',
-                  width: `${progressPct}%`, transition: 'width 0.6s ease',
-                  boxShadow: '0 2px 8px rgba(91,33,182,0.3)',
+                  '--progress-pct': `${progressPct}%`,
                 }} />
               </div>
               {group.status === 'active' && slotsRemaining > 0 && (
@@ -295,7 +306,7 @@ export default function GroupRoom() {
                   const [bg, fg] = AVATAR_COLORS[idx % AVATAR_COLORS.length];
                   return (
                     <div key={member.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                      <div className="avatar-chip" style={{ background: `linear-gradient(135deg, ${bg}, ${bg}cc)`, color: fg }}>
+                      <div className="avatar-chip" style={{ background: `linear-gradient(135deg, ${bg}, ${bg}cc)`, color: fg, animation: idx === group.members.length - 1 ? 'scale-pop 0.4s ease' : 'none' }}>
                         {member.name?.charAt(0)?.toUpperCase()}
                       </div>
                       <div style={{ fontSize: '0.6rem', fontWeight: 600, color: '#6b6560', maxWidth: 44, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -307,7 +318,7 @@ export default function GroupRoom() {
                 {/* Empty slot chips */}
                 {group.status === 'active' && Array.from({ length: slotsRemaining }).map((_, idx) => (
                   <div key={`empty-${idx}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <div className="avatar-chip-empty">
+                    <div className="avatar-chip-empty" style={{ border: '2px dashed rgba(18,16,14,0.1)' }}>
                       <span style={{ fontSize: '1rem', color: '#c8c3bd' }}>+</span>
                     </div>
                     <div style={{ fontSize: '0.6rem', fontWeight: 600, color: '#c8c3bd' }}>Open</div>
@@ -320,13 +331,12 @@ export default function GroupRoom() {
             {group.status === 'active' && (
               <div style={{ borderTop: '1px solid rgba(18,16,14,0.07)', paddingTop: 24 }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-                  {/* Share buttons */}
-                  <button onClick={shareWhatsApp} style={{
+                  <button onClick={shareWhatsApp} className="hover-shine-sweep" style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     background: '#25d366', color: '#fff',
-                    padding: '10px 20px', borderRadius: 12,
+                    padding: '12px 20px', borderRadius: 12,
                     fontSize: '0.8rem', fontWeight: 700, border: 'none', cursor: 'pointer',
-                    boxShadow: '0 4px 16px rgba(37,211,102,0.35)', transition: 'all 0.2s',
+                    boxShadow: '0 4px 16px rgba(37,211,102,0.35)', transition: 'all 0.2s', position: 'relative', overflow: 'hidden'
                   }}
                     onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
                     onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}

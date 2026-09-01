@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Users, Clock, ShoppingBag, ArrowRight, AlertTriangle, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Users, Clock, ShoppingBag, ArrowRight, AlertTriangle, ShieldCheck, RefreshCw, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import OTPLoginModal from '../components/OTPLoginModal';
+import use3DTilt from '../hooks/use3DTilt';
 
 export default function GroupInvite() {
   const { id } = useParams();
@@ -18,6 +19,8 @@ export default function GroupInvite() {
   const [error, setError] = useState(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+
+  const tiltRef = use3DTilt({ maxTilt: 6, scale: 1.01 });
 
   useEffect(() => {
     fetchInviteDetails();
@@ -70,7 +73,7 @@ export default function GroupInvite() {
     return `${h}:${m}:${s}`;
   };
 
-  const formatCurrency = (amount) => {
+  const fmt = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -104,20 +107,32 @@ export default function GroupInvite() {
   const progressPct = Math.round((group.current_size / group.target_size) * 100);
 
   return (
-    <div style={{ background: '#faf8f4', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
-      <div style={{
-        maxWidth: 540, width: '100%', background: '#fff', borderRadius: 28,
-        border: '1px solid rgba(18,16,14,0.08)', padding: '40px 32px 32px',
-        boxShadow: '0 8px 40px rgba(18,16,14,0.06)', position: 'relative',
-        textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 24,
+    <div className="mesh-violet" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', position: 'relative', overflow: 'hidden' }}>
+      
+      {/* Decorative background blobs */}
+      <div className="blob" style={{ position: 'absolute', top: '-10%', left: '-10%', width: 400, height: 400, background: 'radial-gradient(circle, rgba(91,33,182,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div className="blob blob-delay-2" style={{ position: 'absolute', bottom: '-20%', right: '-5%', width: 500, height: 500, background: 'radial-gradient(circle, rgba(240,80,53,0.06) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+      <div ref={tiltRef} className="tilt-card" style={{
+        background: 'rgba(255,255,255,0.95)',
+        backdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255,255,255,0.5)',
+        borderRadius: 32,
+        padding: '40px 32px',
+        maxWidth: 480, width: '100%',
+        boxShadow: '0 32px 80px rgba(91,33,182,0.12), 0 2px 10px rgba(18,16,14,0.04)',
+        textAlign: 'center',
+        position: 'relative', zIndex: 10,
+        display: 'flex', flexDirection: 'column', gap: 24,
       }}>
+        <div className="tilt-card-inner">
+        <div className="glare" />
         
         {/* Decorative elements */}
         <div style={{
           position: 'absolute', top: 0, left: '50%', transform: 'translate(-50%, -50%)',
           background: 'linear-gradient(135deg, #f59e0b, #f05035)', color: '#fff',
-          fontSize: '0.62rem', fontWeight: 800, px: 16, py: 6,
-          padding: '4px 14px', borderRadius: 999, shadow: 'lg',
+          fontSize: '0.62rem', fontWeight: 800, padding: '4px 14px', borderRadius: 999,
           display: 'flex', alignItems: 'center', gap: 6,
           textTransform: 'uppercase', letterSpacing: '0.08em',
         }}>
@@ -150,7 +165,7 @@ export default function GroupInvite() {
               {group.product_name}
             </h4>
             <p style={{ fontSize: '0.78rem', color: '#6b6560' }}>
-              Co-Buying price: <strong style={{ color: '#5b21b6', fontWeight: 800 }}>{formatCurrency(group.tier_price)}</strong>
+              Co-Buying price: <strong style={{ color: '#5b21b6', fontWeight: 800 }}>{fmt(group.tier_price)}</strong>
             </p>
           </div>
         </div>
@@ -174,13 +189,19 @@ export default function GroupInvite() {
             </div>
             {group.original_price && (
               <p style={{ fontSize: '0.68rem', color: '#f05035', fontWeight: 700 }}>
-                ⚠️ The price resets to {formatCurrency(group.original_price)} when timer hits zero
+                ⚠️ The price resets to {fmt(group.original_price)} when timer hits zero
               </p>
             )}
           </div>
         ) : (
-          <div style={{ background: 'rgba(225,29,72,0.06)', border: '1px solid rgba(225,29,72,0.2)', color: '#e11d48', borderRadius: 12, padding: 14, fontSize: '0.78rem', fontWeight: 700 }}>
-            Status: This co-buying team is no longer active ({group.status}).
+          <div style={{ background: '#fdfaf6', borderRadius: 20, padding: 20, border: '1px solid rgba(18,16,14,0.06)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#6b6560' }}>Group Price</span>
+              <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f05035', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{fmt(group.tier_price)}</span>
+            </div>
+            <div style={{ background: 'rgba(225,29,72,0.06)', border: '1px solid rgba(225,29,72,0.2)', color: '#e11d48', borderRadius: 12, padding: 14, fontSize: '0.78rem', fontWeight: 700 }}>
+              Status: This co-buying team is no longer active ({group.status}).
+            </div>
           </div>
         )}
 
@@ -223,6 +244,7 @@ export default function GroupInvite() {
               Funds holds are only captured once the {group.target_size}-member co-buying team fills successfully. If the timer expires before filling, all holds are released.
             </p>
           </div>
+        </div>
         </div>
       </div>
 

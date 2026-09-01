@@ -5,8 +5,10 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import {
   ShoppingBag, Users, Truck, ShieldCheck, RefreshCw,
-  CheckCircle, Package, ArrowRight, ChevronRight
+  Package, Clock, CheckCircle, ChevronRight, LogOut, FileText, Share2, Copy, Lock, Trash2, X, AlertTriangle, User
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import useScrollReveal from '../hooks/useScrollReveal';
 import { Link } from 'react-router-dom';
 import OTPLoginModal from '../components/OTPLoginModal';
 
@@ -67,10 +69,31 @@ function OrderTimeline({ status }) {
 }
 
 export default function MyOrders() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user, updateProfile } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('orders');
+
+  // Security Form State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  // Profile Form State
+  const [profileName, setProfileName] = useState('');
+  const [profileData, setProfileData] = useState({ name: '', phone: '', address: '' });
+  const revealRef = useScrollReveal();
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setProfileName(user.name || '');
+    }
+  }, [user]);
 
   useEffect(() => {
     if (isLoggedIn) fetchOrders();
@@ -84,6 +107,52 @@ export default function MyOrders() {
       setOrders(res.data.orders || []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (!profileName.trim()) return toast.error('Name cannot be empty');
+    setProfileSubmitting(true);
+    try {
+      await updateProfile({ name: profileName });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setProfileSubmitting(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      return toast.error('New passwords do not match');
+    }
+    setPasswordSubmitting(true);
+    try {
+      await api.put('/auth/change-password', { currentPassword, newPassword });
+      toast.success('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to change password');
+    } finally {
+      setPasswordSubmitting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteSubmitting(true);
+    try {
+      await api.delete('/auth/delete-account');
+      toast.success('Account deleted successfully');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/';
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete account');
+      setDeleteSubmitting(false);
+    }
   };
 
   const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
@@ -114,8 +183,8 @@ export default function MyOrders() {
   );
 
   return (
-    <div style={{ background: '#faf8f4', minHeight: '100vh' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px 80px' }}>
+    <div className="mesh-violet" style={{ minHeight: '100vh', padding: '100px 24px 80px' }}>
+      <div ref={revealRef} className="scroll-reveal-group" style={{ maxWidth: 860, margin: '0 auto' }}>
 
         {/* Page header */}
         <div style={{ marginBottom: 40 }}>
@@ -123,14 +192,39 @@ export default function MyOrders() {
             — Your Account
           </span>
           <h1 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.8rem, 4vw, 2.4rem)', color: '#12100e', marginBottom: 8, letterSpacing: '-0.03em' }}>
-            My Orders
+            My Account
           </h1>
           <p style={{ color: '#6b6560', fontSize: '0.875rem' }}>
-            Track your group buying deals and order fulfillments.
+            Track your group buying deals, order fulfillments, and manage your account security.
           </p>
         </div>
 
-        {orders.length === 0 ? (
+        {/* Custom Tabs */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 30, borderBottom: '1px solid rgba(18,16,14,0.08)', paddingBottom: 16 }}>
+          <button
+            onClick={() => setActiveTab('orders')}
+            style={{
+              background: activeTab === 'orders' ? '#12100e' : 'transparent',
+              color: activeTab === 'orders' ? '#fff' : '#6b6560',
+              border: 'none', borderRadius: 999, padding: '8px 20px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            My Orders
+          </button>
+          <button
+            onClick={() => setActiveTab('security')}
+            style={{
+              background: activeTab === 'security' ? '#12100e' : 'transparent',
+              color: activeTab === 'security' ? '#fff' : '#6b6560',
+              border: 'none', borderRadius: 999, padding: '8px 20px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            Profile & Security
+          </button>
+        </div>
+
+        {activeTab === 'orders' && (
+          orders.length === 0 ? (
           <div style={{ textAlign: 'center', background: '#fff', borderRadius: 28, border: '1px solid rgba(18,16,14,0.08)', padding: '60px 24px', boxShadow: '0 4px 20px rgba(18,16,14,0.04)' }}>
             <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(91,33,182,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
               <Package size={28} color="#5b21b6" />
@@ -144,14 +238,14 @@ export default function MyOrders() {
             </Link>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="stagger-group" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {orders.map((order) => {
               let productImages = [];
               try { productImages = typeof order.product_images === 'string' ? JSON.parse(order.product_images) : (order.product_images || []); } catch { productImages = []; }
               const imgUrl = productImages?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200&auto=format&fit=crop&q=70';
 
               return (
-                <div key={order.id} style={{
+                <div key={order.id} className="reveal-item" style={{
                   background: '#fff', borderRadius: 24,
                   border: '1px solid rgba(18,16,14,0.08)',
                   boxShadow: '0 2px 12px rgba(18,16,14,0.04)',
@@ -235,9 +329,9 @@ export default function MyOrders() {
                       {/* Tracking info */}
                       {order.status === 'shipped' && order.courier_name && (
                         <div style={{ background: 'rgba(67,56,202,0.05)', border: '1px solid rgba(67,56,202,0.15)', borderRadius: 12, padding: '10px 14px' }}>
-                          <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#a09a94', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>
-                            Tracking
-                          </div>
+                          <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f05035', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                            {fmt(order.total_amount)}
+                          </span>
                           <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#12100e' }}>{order.courier_name}</div>
                           <div style={{ fontSize: '0.72rem', fontFamily: 'Inter, monospace', fontWeight: 700, color: '#5b21b6', marginTop: 2, userSelect: 'all' }}>
                             {order.tracking_number}
@@ -250,8 +344,112 @@ export default function MyOrders() {
               );
             })}
           </div>
+        ))}
+
+        {activeTab === 'security' && (
+          <div className="stagger-group" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
+            {/* Update Profile Card */}
+            <div className="reveal-item" style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(18,16,14,0.08)', boxShadow: '0 2px 12px rgba(18,16,14,0.04)', padding: '32px' }}>
+              <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.2rem', color: '#12100e', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <User size={20} color="#5b21b6" /> Profile Information
+              </h2>
+              <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 400 }}>
+                <input
+                  type="text"
+                  placeholder="Full Name"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  style={{ background: '#f8f7ff', border: '1px solid rgba(91,33,182,0.15)', borderRadius: 12, padding: '12px 16px', fontSize: '0.9rem', color: '#12100e' }}
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={profileSubmitting}
+                  style={{ background: '#12100e', color: '#fff', border: 'none', borderRadius: 12, padding: '14px', fontSize: '0.9rem', fontWeight: 800, cursor: profileSubmitting ? 'not-allowed' : 'pointer', opacity: profileSubmitting ? 0.7 : 1, marginTop: 8 }}
+                >
+                  {profileSubmitting ? 'Saving...' : 'Save Profile'}
+                </button>
+              </form>
+            </div>
+
+            {/* Change Password Card */}
+            <div className="reveal-item" style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(18,16,14,0.08)', boxShadow: '0 2px 12px rgba(18,16,14,0.04)', padding: '32px' }}>
+              <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.2rem', color: '#12100e', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Lock size={20} color="#5b21b6" /> Change Password
+              </h2>
+              <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 400 }}>
+                <input
+                  type="password"
+                  placeholder="Current Password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  style={{ background: '#f8f7ff', border: '1px solid rgba(91,33,182,0.15)', borderRadius: 12, padding: '12px 16px', fontSize: '0.9rem', color: '#12100e' }}
+                  required
+                />
+                <input
+                  type="password"
+                  placeholder="New Password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  style={{ background: '#f8f7ff', border: '1px solid rgba(91,33,182,0.15)', borderRadius: 12, padding: '12px 16px', fontSize: '0.9rem', color: '#12100e' }}
+                  required
+                />
+                <input
+                  type="password"
+                  placeholder="Confirm New Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={{ background: '#f8f7ff', border: '1px solid rgba(91,33,182,0.15)', borderRadius: 12, padding: '12px 16px', fontSize: '0.9rem', color: '#12100e' }}
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={passwordSubmitting}
+                  style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 12, padding: '14px', fontSize: '0.9rem', fontWeight: 800, cursor: passwordSubmitting ? 'not-allowed' : 'pointer', opacity: passwordSubmitting ? 0.7 : 1, marginTop: 8 }}
+                >
+                  {passwordSubmitting ? 'Updating...' : 'Change Password'}
+                </button>
+              </form>
+            </div>
+
+            {/* Danger Zone Card */}
+            <div className="reveal-item" style={{ background: '#fff0f0', borderRadius: 24, border: '1px solid rgba(220,38,38,0.2)', padding: '32px' }}>
+              <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.2rem', color: '#dc2626', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Trash2 size={20} /> Danger Zone
+              </h2>
+              <p style={{ color: '#991b1b', fontSize: '0.85rem', marginBottom: 24, lineHeight: 1.6 }}>
+                Deleting your account is permanent. This will anonymize your profile but retain past order data for compliance. You will immediately be logged out.
+              </p>
+              <button
+                onClick={() => setDeleteConfirmOpen(true)}
+                style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, padding: '12px 24px', fontSize: '0.9rem', fontWeight: 800, cursor: 'pointer' }}
+              >
+                Delete Account
+              </button>
+            </div>
+          </div>
         )}
       </div>
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteConfirmOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', padding: 16 }}>
+          <div style={{ width: '100%', maxWidth: 400, background: '#fff', borderRadius: 24, padding: 32, position: 'relative', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <button onClick={() => setDeleteConfirmOpen(false)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer', color: '#a09a94' }}><X size={20}/></button>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(220,38,38,0.1)', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <AlertTriangle size={28} />
+            </div>
+            <h3 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.4rem', color: '#12100e', marginBottom: 8 }}>Delete Account?</h3>
+            <p style={{ fontSize: '0.875rem', color: '#6b6560', marginBottom: 24, lineHeight: 1.5 }}>Are you absolutely sure you want to delete your customer account? This action cannot be undone.</p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => setDeleteConfirmOpen(false)} style={{ flex: 1, background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 12, padding: '14px', fontSize: '0.9rem', fontWeight: 800, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleDeleteAccount} disabled={deleteSubmitting} style={{ flex: 1, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, padding: '14px', fontSize: '0.9rem', fontWeight: 800, cursor: deleteSubmitting ? 'not-allowed' : 'pointer', opacity: deleteSubmitting ? 0.7 : 1 }}>
+                {deleteSubmitting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

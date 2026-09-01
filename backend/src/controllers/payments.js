@@ -25,7 +25,7 @@ const ALLOWED_COD_PINCODES = ['110001', '400001', '560001', '700001', '600001', 
  * BE-20: Create Razorpay Pre-Auth Order
  */
 export const createPaymentOrder = async (req, res) => {
-  const { group_id, product_id, target_size, shipping_address, coupon_code } = req.body;
+  const { group_id, product_id, target_size, shipping_address, coupon_code, variant_id, color, size } = req.body;
   const buyerId = req.user.id;
 
   if (!shipping_address) {
@@ -116,8 +116,8 @@ export const createPaymentOrder = async (req, res) => {
 
     // 4. Create pending order in PostgreSQL database
     const insertOrderQuery = `
-      INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, razorpay_order_id, is_cod, shipping_address, coupon_code)
-      VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'pending', $8, false, $9, $10)
+      INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, razorpay_order_id, is_cod, shipping_address, coupon_code, variant_id, color, size)
+      VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'pending', $8, false, $9, $10, $11, $12, $13)
       RETURNING *
     `;
     const orderResult = await pool.query(insertOrderQuery, [
@@ -130,7 +130,10 @@ export const createPaymentOrder = async (req, res) => {
       commissionPct,
       razorpayOrder.id,
       shipping_address,
-      appliedCouponCode
+      appliedCouponCode,
+      variant_id || null,
+      color || null,
+      size || null
     ]);
 
     return res.status(201).json({
@@ -189,6 +192,13 @@ export const verifyPaymentSignature = async (req, res) => {
     // Increment coupon uses if applied
     if (order.coupon_code) {
       await client.query('UPDATE coupons SET uses = uses + 1 WHERE code = $1', [order.coupon_code]);
+    }
+
+    // Decrement stock upon pre-authorization
+    if (order.variant_id) {
+      await client.query('UPDATE product_variants SET stock = GREATEST(0, stock - 1) WHERE id = $1', [order.variant_id]);
+    } else {
+      await client.query('UPDATE products SET stock = GREATEST(0, stock - 1) WHERE id = $1', [order.product_id]);
     }
 
     // 3. Register payment in preauth table
@@ -385,7 +395,7 @@ export const handleRazorpayWebhook = async (req, res) => {
  * BE-24: Cash on Delivery (COD) Flow
  */
 export const createCodOrder = async (req, res) => {
-  const { group_id, product_id, target_size, shipping_address, pincode, coupon_code } = req.body;
+  const { group_id, product_id, target_size, shipping_address, pincode, coupon_code, variant_id, color, size } = req.body;
   const buyerId = req.user.id;
 
   if (!shipping_address || !pincode) {
@@ -477,8 +487,8 @@ export const createCodOrder = async (req, res) => {
 
       // Create confirmed order
       const insertOrderQuery = `
-        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, coupon_code)
-        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9)
+        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, coupon_code, variant_id, color, size)
+        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12)
         RETURNING *
       `;
       const orderRes = await client.query(insertOrderQuery, [
@@ -490,8 +500,18 @@ export const createCodOrder = async (req, res) => {
         finalAmount,
         commissionPct,
         `${shipping_address} (Pincode: ${pincode})`,
-        appliedCouponCode
+        appliedCouponCode,
+        variant_id || null,
+        color || null,
+        size || null
       ]);
+
+      // Decrement stock for COD
+      if (variant_id) {
+        await client.query('UPDATE product_variants SET stock = GREATEST(0, stock - 1) WHERE id = $1', [variant_id]);
+      } else {
+        await client.query('UPDATE products SET stock = GREATEST(0, stock - 1) WHERE id = $1', [finalProductId]);
+      }
 
       const redisKey = `group:${newGroup.id}:timer`;
       await redisClient.set(redisKey, Math.floor(timerEnd.getTime() / 1000).toString(), { EX: 86400 });
@@ -529,8 +549,8 @@ export const createCodOrder = async (req, res) => {
       await client.query('UPDATE groups SET current_size = $1 WHERE id = $2', [updatedSize, group_id]);
 
       const insertOrderQuery = `
-        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, coupon_code)
-        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9)
+        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, coupon_code, variant_id, color, size)
+        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12)
         RETURNING *
       `;
       const orderRes = await client.query(insertOrderQuery, [
@@ -542,8 +562,18 @@ export const createCodOrder = async (req, res) => {
         finalAmount,
         commissionPct,
         `${shipping_address} (Pincode: ${pincode})`,
-        appliedCouponCode
+        appliedCouponCode,
+        variant_id || null,
+        color || null,
+        size || null
       ]);
+
+      // Decrement stock for COD
+      if (variant_id) {
+        await client.query('UPDATE product_variants SET stock = GREATEST(0, stock - 1) WHERE id = $1', [variant_id]);
+      } else {
+        await client.query('UPDATE products SET stock = GREATEST(0, stock - 1) WHERE id = $1', [finalProductId]);
+      }
 
       if (updatedSize === group.target_size) {
         // Group Complete Flow (Trigger capture on other holds)

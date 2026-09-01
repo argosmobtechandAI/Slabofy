@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Social Group Buying Startup Script
+# Slabofy Startup Script
 
 # Color Codes
 GREEN='\033[0;32m'
@@ -10,7 +10,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 echo -e "${CYAN}==================================================${NC}"
-echo -e "${GREEN}🚀 Welcome to the Social Group Buying Setup Helper${NC}"
+echo -e "${GREEN}🚀 Welcome to the Slabofy Setup Helper${NC}"
 echo -e "${CYAN}==================================================${NC}"
 
 # Check for Node.js

@@ -1,5 +1,5 @@
 DEVELOPER TASK SHEET
-Social Group Buying E-Commerce Platform
+Slabofy E-Commerce Platform
 Client: Sahil Srivastava  |  Prepared By: ArgosMob Tech & AI Pvt Ltd
 April 2026  |  Stack: Node.js / React.js / PostgreSQL / Redis
 P1 — Critical / Core Logic

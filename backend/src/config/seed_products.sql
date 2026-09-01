@@ -1,5 +1,5 @@
 -- ============================================================
---  SOCIALGROUP — DUMMY PRODUCT SEED DATA
+--  SLABOFY — DUMMY PRODUCT SEED DATA
 --  20 products across 4 categories with full tier pricing
 --  seller_id = 1 (admin), status = 'active' (bypass approval)
 -- ============================================================

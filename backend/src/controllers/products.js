@@ -4,7 +4,12 @@ import { pool } from '../config/db.js';
  * BE-08: Product Listing (Seller only)
  */
 export const createProduct = async (req, res) => {
-  const { name, description, images, category_id, sku, stock, tiers } = req.body;
+  const {
+    name, description, images, videos, category_id,
+    sku, stock, tiers, variants,
+    max_group_size,
+    group_window_hours
+  } = req.body;
   const sellerId = req.user.id;
 
   // 1. Verify seller is approved
@@ -23,28 +28,60 @@ export const createProduct = async (req, res) => {
   }
 
   // 2. Validate input fields
-  if (!name || stock === undefined || !tiers || !Array.isArray(tiers)) {
-    return res.status(400).json({ error: 'Name, stock, and tiers list are required' });
+  if (!name || stock === undefined) {
+    return res.status(400).json({ error: 'Name and stock are required' });
   }
 
-  // Validate: must include all 5 tiers (1, 2, 3, 5, 10)
-  const requiredSizes = [1, 2, 3, 5, 10];
-  const providedSizes = tiers.map((t) => parseInt(t.group_size)).sort((a, b) => a - b);
-  
-  const hasAllTiers = requiredSizes.every((size) => providedSizes.includes(size)) && tiers.length === 5;
-  if (!hasAllTiers) {
-    return res.status(400).json({ error: 'Tiers must exactly cover group sizes 1, 2, 3, 5, and 10' });
+  const parsedMaxGroupSize = parseInt(max_group_size);
+  if (!parsedMaxGroupSize || parsedMaxGroupSize < 2 || parsedMaxGroupSize > 100) {
+    return res.status(400).json({ error: 'max_group_size must be an integer between 2 and 100' });
   }
 
-  // Sort tiers by group size descending to validate descending price (e.g. 10 size is cheapest, 1 size is most expensive)
-  // Or sort ascending: size 1 > size 2 > size 3 > size 5 > size 10 -> price 1 > price 2 > price 3 > price 5 > price 10
-  const sortedTiers = [...tiers].sort((a, b) => a.group_size - b.group_size);
+  const parsedWindowHours = parseInt(group_window_hours);
+  if (!parsedWindowHours || parsedWindowHours < 6 || parsedWindowHours > 168) {
+    return res.status(400).json({ error: 'group_window_hours must be between 6 and 168' });
+  }
+
+  if (!tiers || !Array.isArray(tiers) || tiers.length < 2) {
+    return res.status(400).json({ error: 'At least 2 tiers are required (solo + at least one group tier)' });
+  }
+
+  const parsedTiers = tiers.map(t => ({
+    group_size: parseInt(t.group_size),
+    price: parseFloat(t.price)
+  }));
+
+  if (parsedTiers.some(t => isNaN(t.group_size) || t.group_size < 1)) {
+    return res.status(400).json({ error: 'All tier group sizes must be positive integers' });
+  }
+
+  const sizeSet = new Set(parsedTiers.map(t => t.group_size));
+  if (sizeSet.size !== parsedTiers.length) {
+    return res.status(400).json({ error: 'Duplicate tier group sizes are not allowed' });
+  }
+
+  if (!sizeSet.has(1)) {
+    return res.status(400).json({ error: 'A solo tier (group_size = 1) is required' });
+  }
+
+  if (parsedTiers.some(t => t.group_size > parsedMaxGroupSize)) {
+    return res.status(400).json({
+      error: `All tier sizes must be ≤ max_group_size (${parsedMaxGroupSize})`
+    });
+  }
+
+  const maxTierSize = Math.max(...parsedTiers.map(t => t.group_size));
+  if (maxTierSize !== parsedMaxGroupSize) {
+    return res.status(400).json({
+      error: `The largest tier group_size (${maxTierSize}) must equal max_group_size (${parsedMaxGroupSize})`
+    });
+  }
+
+  const sortedTiers = [...parsedTiers].sort((a, b) => a.group_size - b.group_size);
   for (let i = 1; i < sortedTiers.length; i++) {
-    const prevPrice = parseFloat(sortedTiers[i - 1].price);
-    const currPrice = parseFloat(sortedTiers[i].price);
-    if (currPrice >= prevPrice) {
+    if (sortedTiers[i].price >= sortedTiers[i - 1].price) {
       return res.status(400).json({
-        error: `Price validation failed: Pricing must decrease as group size increases. Tier of size ${sortedTiers[i].group_size} (Price: ${currPrice}) is not cheaper than size ${sortedTiers[i - 1].group_size} (Price: ${prevPrice})`
+        error: `Price must decrease as group size increases. Tier size ${sortedTiers[i].group_size} (₹${sortedTiers[i].price}) is not cheaper than tier size ${sortedTiers[i-1].group_size} (₹${sortedTiers[i-1].price})`
       });
     }
   }
@@ -56,8 +93,9 @@ export const createProduct = async (req, res) => {
 
     // Create product
     const productQuery = `
-      INSERT INTO products (seller_id, category_id, name, description, images, sku, stock, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+      INSERT INTO products 
+        (seller_id, category_id, name, description, images, videos, sku, stock, status, max_group_size, group_window_hours)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
       RETURNING *
     `;
     const productVal = [
@@ -66,8 +104,11 @@ export const createProduct = async (req, res) => {
       name,
       description || '',
       JSON.stringify(images || []),
+      JSON.stringify(videos || []),
       sku || null,
-      stock
+      stock,
+      parsedMaxGroupSize,
+      parsedWindowHours
     ];
     const productResult = await client.query(productQuery, productVal);
     const newProduct = productResult.rows[0];
@@ -79,6 +120,17 @@ export const createProduct = async (req, res) => {
     `;
     for (const tier of sortedTiers) {
       await client.query(tierInsertQuery, [newProduct.id, tier.group_size, tier.price]);
+    }
+
+    // Insert variants if provided
+    if (variants && Array.isArray(variants) && variants.length > 0) {
+      const variantInsertQuery = `
+        INSERT INTO product_variants (product_id, color, size, stock, image_url)
+        VALUES ($1, $2, $3, $4, $5)
+      `;
+      for (const variant of variants) {
+        await client.query(variantInsertQuery, [newProduct.id, variant.color, variant.size, variant.stock, variant.image_url || null]);
+      }
     }
 
     await client.query('COMMIT');
@@ -202,7 +254,7 @@ export const getProducts = async (req, res) => {
     const query = `
       SELECT p.*, c.name as category_name,
              (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = 1) as solo_price,
-             (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = 10) as best_price,
+             (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = p.max_group_size) as best_price,
              (
                SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price))
                FROM product_tiers pt WHERE pt.product_id = p.id
@@ -256,6 +308,10 @@ export const getProductDetail = async (req, res) => {
                SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price) ORDER BY pt.group_size ASC)
                FROM product_tiers pt WHERE pt.product_id = p.id
              ) as tiers,
+             COALESCE((
+               SELECT json_agg(json_build_object('id', pv.id, 'color', pv.color, 'size', pv.size, 'stock', pv.stock, 'image_url', pv.image_url))
+               FROM product_variants pv WHERE pv.product_id = p.id
+             ), '[]'::json) as variants,
              (
                SELECT COUNT(*)::int 
                FROM groups g 

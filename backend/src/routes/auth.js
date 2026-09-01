@@ -9,7 +9,10 @@ import {
   resetPassword, 
   getProfile, 
   updateProfile, 
-  getBuyerOrders 
+  getBuyerOrders,
+  sellerSignup,
+  changePassword,
+  deleteAccount
 } from '../controllers/auth.js';
 import { verifyToken } from '../middleware/auth.js';
 
@@ -23,10 +26,15 @@ router.post('/register', register);
 router.post('/login', loginWithPassword);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
+router.post('/seller/signup', sellerSignup);
 
 // Protected profile endpoints
 router.get('/profile', verifyToken, getProfile);
 router.put('/profile', verifyToken, updateProfile);
 router.get('/orders', verifyToken, getBuyerOrders);
+
+// Security endpoints
+router.put('/change-password', verifyToken, changePassword);
+router.delete('/delete-account', verifyToken, deleteAccount);
 
 export default router;

@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@socialgroupbuying.com';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@slabofy.com';
 
 /**
  * Sends an email notification using SendGrid or Mailgun API (mocked here, logs to DB)

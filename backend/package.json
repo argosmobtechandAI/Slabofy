@@ -1,7 +1,7 @@
 {
-  "name": "socialgroup-backend",
+  "name": "slabofy-backend",
   "version": "1.0.0",
-  "description": "Backend API for Social Group Buying E-Commerce Platform",
+  "description": "Backend API for Slabofy E-Commerce Platform",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
@@ -10,16 +10,17 @@
     "db:init": "node src/config/init_db.js"
   },
   "dependencies": {
-    "express": "^5.2.1",
-    "pg": "^8.20.0",
-    "redis": "^4.6.13",
-    "jsonwebtoken": "^9.0.3",
-    "bcryptjs": "^2.4.3",
-    "dotenv": "^17.4.1",
     "axios": "^1.14.0",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.2.0",
+    "node-cron": "^3.0.3",
+    "pg": "^8.20.0",
     "razorpay": "^2.9.6",
-    "node-cron": "^3.0.3"
+    "redis": "^4.6.13"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

@@ -14,7 +14,8 @@ import {
   getCoupons,
   deleteCoupon,
   getDashboardStats,
-  getCustomers
+  getCustomers,
+  getOrders
 } from '../controllers/admin.js';
 import { forceCompleteGroup } from '../controllers/groups.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
@@ -54,5 +55,8 @@ router.get('/dashboard', getDashboardStats);
 
 // Customers list database view
 router.get('/customers', getCustomers);
+
+// Orders list database view
+router.get('/orders', getOrders);
 
 export default router;

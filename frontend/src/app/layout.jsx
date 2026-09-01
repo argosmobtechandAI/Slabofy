@@ -5,7 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import '../index.css';
 
 export const metadata = {
-  title: 'SocialGroup Buying | Premium Co-Buying E-Commerce Platform',
+  title: 'Slabofy | Premium Co-Buying E-Commerce Platform',
   description: 'Join co-buying teams to access tier-based wholesale discounts, pre-authorization security, and real-time social shopping.',
 };
 

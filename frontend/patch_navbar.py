@@ -1,26 +1,18 @@
-"use client";
+import re
 
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { LogIn, LogOut, ShieldAlert, Store, User, Zap, ArrowUpRight } from 'lucide-react';
-import OTPLoginModal from './OTPLoginModal';
-import { Link, useLocation } from 'react-router-dom';
+with open('src/components/Navbar.jsx', 'r') as f:
+    content = f.read()
 
-export default function Navbar() {
-  const { isLoggedIn, user, logout } = useAuth();
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
-  const location = useLocation();
-  const [scrolled, setScrolled] = useState(false);
+# Add mobileMenuOpen state and useLocation
+content = content.replace("import { Link } from 'react-router-dom';", "import { Link, useLocation } from 'react-router-dom';")
+content = content.replace("const [loginModalOpen, setLoginModalOpen] = useState(false);", "const [loginModalOpen, setLoginModalOpen] = useState(false);\n  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);\n  const location = useLocation();")
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+# We want to add the hamburger menu and the drawer.
+# The mobile hamburger goes inside the main flex container
+# We find: `<div style={{ display: 'flex', alignItems: 'center', gap: 12 }} className="hidden md:flex">`
+# And add the hamburger button after it. But actually we should just replace the whole navbar contents from `<nav...>` to `</nav>` to ensure we do it cleanly.
 
-  return (
-    <>
-            <nav style={{
+new_nav = """      <nav style={{
         position: 'sticky', top: 0, zIndex: 40,
         background: scrolled ? 'rgba(250,248,244,0.92)' : 'rgba(250,248,244,0.7)',
         backdropFilter: 'blur(20px) saturate(160%)',
@@ -142,10 +134,102 @@ export default function Navbar() {
               </div>
             )}
           </div>
-        </div>
-      </nav>
 
-      <OTPLoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
-    </>
-  );
-}
+          {/* Mobile Hamburger */}
+          <button 
+            className="md:hidden" 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            style={{
+              background: 'rgba(18,16,14,0.05)',
+              border: '1px solid rgba(18,16,14,0.1)',
+              borderRadius: 12,
+              width: 40, height: 40,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#12100e', cursor: 'pointer'
+            }}
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        {/* Mobile Drawer Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden animate-fade-in" style={{
+            position: 'absolute', top: 64, left: 0, right: 0,
+            background: '#faf8f4', borderBottom: '1px solid rgba(18,16,14,0.1)',
+            boxShadow: '0 20px 40px rgba(18,16,14,0.1)', padding: '16px 24px 24px',
+            display: 'flex', flexDirection: 'column', gap: 16
+          }}>
+            {[{ to: '/', label: 'Discover', icon: <Zap size={18} /> }, { to: '/orders', label: 'My Orders', icon: <ShoppingBag size={18} /> }].map(({ to, label, icon }) => {
+              const active = location.pathname === to;
+              return (
+              <Link
+                key={to}
+                to={to}
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '14px 16px', borderRadius: 16,
+                  background: active ? '#fff' : 'rgba(18,16,14,0.03)',
+                  border: `1px solid ${active ? 'rgba(18,16,14,0.1)' : 'transparent'}`,
+                  color: active ? '#12100e' : '#6b6560',
+                  fontSize: '0.95rem', fontWeight: 700, textDecoration: 'none',
+                  boxShadow: active ? '0 4px 12px rgba(18,16,14,0.05)' : 'none'
+                }}
+              >
+                {icon} {label}
+              </Link>
+            )})}
+            
+            {isLoggedIn && user?.role === 'admin' && (
+              <Link to="/admin" onClick={() => setMobileMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 16, background: 'rgba(91,33,182,0.08)', color: '#5b21b6', fontSize: '0.95rem', fontWeight: 700, textDecoration: 'none' }}>
+                <ShieldAlert size={18} /> Admin Dashboard
+              </Link>
+            )}
+            
+            {isLoggedIn && user?.role === 'seller' && (
+              <Link to="/seller" onClick={() => setMobileMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 16, background: 'rgba(67,56,202,0.08)', color: '#4338ca', fontSize: '0.95rem', fontWeight: 700, textDecoration: 'none' }}>
+                <Store size={18} /> Seller Hub
+              </Link>
+            )}
+
+            <div style={{ height: 1, background: 'rgba(18,16,14,0.08)', margin: '8px 0' }} />
+
+            {isLoggedIn ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #5b21b6, #f05035)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800 }}>
+                    {user.name?.charAt(0)?.toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#12100e' }}>{user.name}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#a09a94' }}>{user.email}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { logout(); setMobileMenuOpen(false); }}
+                  style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(240,80,53,0.1)', color: '#f05035', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <LogOut size={18} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setLoginModalOpen(true); setMobileMenuOpen(false); }}
+                className="btn-ink" style={{ width: '100%', justifyContent: 'center', padding: '16px', fontSize: '0.95rem', borderRadius: 16 }}
+              >
+                Get Started <ArrowUpRight size={16} />
+              </button>
+            )}
+          </div>
+        )}
+      </nav>"""
+
+# Find old nav and replace
+nav_start = content.find("<nav ")
+nav_end = content.find("</nav>") + 6
+
+content = content[:nav_start] + new_nav + content[nav_end:]
+
+with open('src/components/Navbar.jsx', 'w') as f:
+    f.write(content)

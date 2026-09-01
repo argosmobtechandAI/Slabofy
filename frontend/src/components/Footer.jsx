@@ -24,7 +24,9 @@ const WhatsAppIcon = () => (
 
 export default function Footer() {
   return (
-    <footer style={{ background: '#12100e', color: '#faf8f4', marginTop: 80 }}>
+    <footer style={{ background: 'linear-gradient(to bottom, #faf8f4, #f0ece6)', color: '#12100e', marginTop: 80, borderTop: '1px solid rgba(18,16,14,0.06)', position: 'relative', overflow: 'hidden' }}>
+      <div className="blob" style={{ position: 'absolute', bottom: '-20%', right: '-5%', width: 400, height: 400, background: 'radial-gradient(circle, rgba(91,33,182,0.06) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div className="blob blob-delay-2" style={{ position: 'absolute', top: '10%', left: '-10%', width: 300, height: 300, background: 'radial-gradient(circle, rgba(240,80,53,0.04) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ height: 2, background: 'linear-gradient(90deg, transparent, #5b21b6, #f05035, #f59e0b, transparent)' }} />
       <div style={{ maxWidth: 1320, margin: '0 auto', padding: '60px 24px 40px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 48, marginBottom: 52 }}>
@@ -34,7 +36,7 @@ export default function Footer() {
                 <span style={{ color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.1rem' }}>S</span>
               </div>
               <div>
-                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.05rem', color: '#faf8f4', letterSpacing: '-0.03em' }}>Social<span style={{ color: '#f05035' }}>Group</span></div>
+                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.05rem', color: '#12100e', letterSpacing: '-0.03em' }}>Slab<span style={{ color: '#f05035' }}>ofy</span></div>
                 <div style={{ fontSize: '0.6rem', fontWeight: 600, color: '#6b6560', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Group Buying</div>
               </div>
             </Link>
@@ -43,9 +45,9 @@ export default function Footer() {
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
               {[{ icon: <WhatsAppIcon />, label: 'WhatsApp', color: '#25d366' }, { icon: <InstagramIcon />, label: 'Instagram', color: '#e1306c' }, { icon: <TwitterIcon />, label: 'Twitter', color: '#1da1f2' }].map(({ icon, label, color }) => (
-                <a key={label} href="#" title={label} style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(250,248,244,0.07)', border: '1px solid rgba(250,248,244,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a09a94', textDecoration: 'none', transition: 'all 0.2s' }}
-                  onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color + '44'; e.currentTarget.style.background = color + '18'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = '#a09a94'; e.currentTarget.style.borderColor = 'rgba(250,248,244,0.1)'; e.currentTarget.style.background = 'rgba(250,248,244,0.07)'; }}>
+                <a key={label} href="#" title={label} style={{ width: 38, height: 38, borderRadius: 10, background: '#fff', border: '1px solid rgba(18,16,14,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a09a94', textDecoration: 'none', transition: 'all 0.2s' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color + '44'; e.currentTarget.style.background = '#fff'; e.currentTarget.style.boxShadow = '0 4px 12px ' + color + '40'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#a09a94'; e.currentTarget.style.borderColor = 'rgba(18,16,14,0.1)'; e.currentTarget.style.background = '#fff'; e.currentTarget.style.boxShadow = 'none'; }}>
                   {icon}
                 </a>
               ))}
@@ -56,7 +58,7 @@ export default function Footer() {
             <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 20 }}>Discover</div>
             {[{ to: '/', label: 'Browse Deals' }, { to: '/orders', label: 'My Orders' }].map(({ to, label }) => (
               <Link key={to} to={to} style={{ display: 'block', color: '#a09a94', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500, marginBottom: 12, transition: 'color 0.2s' }}
-                onMouseEnter={e => e.currentTarget.style.color = '#faf8f4'}
+                onMouseEnter={e => e.currentTarget.style.color = '#5b21b6'}
                 onMouseLeave={e => e.currentTarget.style.color = '#a09a94'}>{label}</Link>
             ))}
           </div>
@@ -65,13 +67,13 @@ export default function Footer() {
             <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 20 }}>For Sellers</div>
             {[{ to: '/seller', label: 'Seller Dashboard' }, { to: '/seller', label: 'List a Product' }, { to: '/seller', label: 'Track Your Orders' }].map(({ to, label }) => (
               <Link key={label} to={to} style={{ display: 'block', color: '#a09a94', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500, marginBottom: 12, transition: 'color 0.2s' }}
-                onMouseEnter={e => e.currentTarget.style.color = '#faf8f4'}
+                onMouseEnter={e => e.currentTarget.style.color = '#5b21b6'}
                 onMouseLeave={e => e.currentTarget.style.color = '#a09a94'}>{label}</Link>
             ))}
           </div>
 
           <div>
-            <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 20 }}>Why SocialGroup</div>
+            <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 20 }}>Why Slabofy</div>
             {[{ icon: <ShieldCheck size={14} />, text: 'Pre-Auth Payment Hold' }, { icon: <Users size={14} />, text: '50,000+ Active Buyers' }, { icon: <Zap size={14} />, text: 'Up to 60% Savings' }, { icon: <Heart size={14} />, text: '100% Verified Sellers' }].map(({ icon, text }) => (
               <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <div style={{ color: '#5b21b6', flexShrink: 0 }}>{icon}</div>
@@ -81,13 +83,17 @@ export default function Footer() {
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid rgba(250,248,244,0.08)', paddingTop: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-          <p style={{ fontSize: '0.75rem', color: '#4a4642', fontWeight: 500 }}>© {new Date().getFullYear()} SocialGroup. All rights reserved.</p>
+        <div style={{ borderTop: '1px solid rgba(18,16,14,0.08)', paddingTop: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+          <p style={{ fontSize: '0.75rem', color: '#4a4642', fontWeight: 500 }}>© {new Date().getFullYear()} Slabofy. All rights reserved.</p>
           <div style={{ display: 'flex', gap: 24 }}>
-            {['Privacy Policy', 'Terms of Service', 'Refund Policy'].map(l => (
-              <a key={l} href="#" style={{ fontSize: '0.75rem', color: '#4a4642', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
+            {[
+              { label: 'Privacy Policy', path: '/privacy-policy' },
+              { label: 'Terms of Service', path: '/terms-of-service' },
+              { label: 'Refund Policy', path: '/refund-policy' }
+            ].map(l => (
+              <Link key={l.label} to={l.path} style={{ fontSize: '0.75rem', color: '#4a4642', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
                 onMouseEnter={e => e.currentTarget.style.color = '#a09a94'}
-                onMouseLeave={e => e.currentTarget.style.color = '#4a4642'}>{l}</a>
+                onMouseLeave={e => e.currentTarget.style.color = '#4a4642'}>{l.label}</Link>
             ))}
           </div>
         </div>

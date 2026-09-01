@@ -27,9 +27,6 @@ export const createGroup = async (req, res) => {
   }
 
   const parsedTargetSize = parseInt(target_size);
-  if (![2, 3, 5, 10].includes(parsedTargetSize)) {
-    return res.status(400).json({ error: 'Target size must be 2, 3, 5, or 10' });
-  }
 
   const client = await pool.connect();
   try {
@@ -37,7 +34,7 @@ export const createGroup = async (req, res) => {
 
     // 1. Verify product status and stock
     const productCheck = await client.query(
-      'SELECT id, status, stock FROM products WHERE id = $1',
+      'SELECT id, status, stock, max_group_size, group_window_hours FROM products WHERE id = $1',
       [product_id]
     );
     const product = productCheck.rows[0];
@@ -53,15 +50,25 @@ export const createGroup = async (req, res) => {
 
     // 2. Verify target size has a tier price
     const tierCheck = await client.query(
-      'SELECT price FROM product_tiers WHERE product_id = $1 AND group_size = $2',
-      [product_id, parsedTargetSize]
+      'SELECT group_size FROM product_tiers WHERE product_id = $1 AND group_size > 1',
+      [product_id]
     );
-    if (tierCheck.rowCount === 0) {
-      return res.status(400).json({ error: `Pricing tier for group size ${parsedTargetSize} is not defined` });
+    const validGroupSizes = tierCheck.rows.map(r => r.group_size);
+
+    if (!validGroupSizes.includes(parsedTargetSize)) {
+      return res.status(400).json({
+        error: `Target size ${parsedTargetSize} is not a valid group tier for this product. Valid sizes: ${validGroupSizes.join(', ')}`
+      });
     }
 
-    // 3. Create Group in active status with 24-hour expiration
-    const timerEnd = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+    if (parsedTargetSize > product.max_group_size) {
+      return res.status(400).json({
+        error: `Target size exceeds the maximum allowed group size of ${product.max_group_size} for this product`
+      });
+    }
+
+    // 3. Create Group in active status with dynamic expiration
+    const timerEnd = new Date(Date.now() + product.group_window_hours * 60 * 60 * 1000);
     const insertGroupQuery = `
       INSERT INTO groups (product_id, creator_id, target_size, current_size, status, timer_end)
       VALUES ($1, $2, $3, 1, 'active', $4)
@@ -76,10 +83,11 @@ export const createGroup = async (req, res) => {
       [group.id, creatorId]
     );
 
-    // 5. Store timer end Unix timestamp in Redis with 24h TTL
+    // 5. Store timer end Unix timestamp in Redis with dynamic TTL
     const redisKey = `group:${group.id}:timer`;
     const unixTimestamp = Math.floor(timerEnd.getTime() / 1000);
-    await redisClient.set(redisKey, unixTimestamp.toString(), { EX: 86400 });
+    const ttlSeconds = product.group_window_hours * 3600;
+    await redisClient.set(redisKey, unixTimestamp.toString(), { EX: ttlSeconds });
 
     await client.query('COMMIT');
 
@@ -536,19 +544,35 @@ export const forceCompleteGroup = async (req, res) => {
  */
 export const getActiveGroups = async (req, res) => {
   const { product_id } = req.query;
-  if (!product_id) {
-    return res.status(400).json({ error: 'Product ID query parameter is required' });
-  }
+  
   try {
-    const query = `
-      SELECT g.*, u.name as creator_name,
-             (g.target_size - g.current_size) as slots_remaining
-      FROM groups g
-      JOIN users u ON g.creator_id = u.id
-      WHERE g.product_id = $1 AND g.status = 'active' AND g.timer_end > NOW()
-      ORDER BY g.created_at DESC
-    `;
-    const result = await pool.query(query, [product_id]);
+    let query, params;
+    if (product_id) {
+      query = `
+        SELECT g.*, u.name as creator_name,
+               (g.target_size - g.current_size) as slots_remaining
+        FROM groups g
+        JOIN users u ON g.creator_id = u.id
+        WHERE g.product_id = $1 AND g.status = 'active' AND g.timer_end > NOW()
+        ORDER BY g.created_at DESC
+      `;
+      params = [product_id];
+    } else {
+      query = `
+        SELECT g.*, u.name as creator_name,
+               (g.target_size - g.current_size) as slots_remaining,
+               p.name as product_name, p.images->>0 as product_image,
+               (SELECT price FROM product_tiers pt WHERE pt.product_id = g.product_id AND pt.group_size = g.target_size LIMIT 1) as tier_price
+        FROM groups g
+        JOIN users u ON g.creator_id = u.id
+        JOIN products p ON g.product_id = p.id
+        WHERE g.status = 'active' AND g.timer_end > NOW()
+        ORDER BY g.created_at DESC
+        LIMIT 20
+      `;
+      params = [];
+    }
+    const result = await pool.query(query, params);
     return res.status(200).json({ groups: result.rows });
   } catch (error) {
     console.error('Error fetching active groups:', error.message);

@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { 
   ShieldAlert, BarChart3, FolderHeart, Users, ListFilter, Percent, 
-  Trash2, Check, X, RefreshCw, Plus, Calendar, AlertTriangle, ShieldCheck, Tag, Info 
+  Trash2, Check, X, RefreshCw, Plus, Calendar, AlertTriangle, ShieldCheck, Tag, Info, Package, Lock, Menu, TrendingUp, Clock, CheckCircle2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -15,6 +15,8 @@ export default function AdminPanel() {
 
   // Navigation state
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'categories', 'sellers', 'products', 'coupons', 'customers'
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
 
   // Data states
   const [stats, setStats] = useState(null);
@@ -23,6 +25,7 @@ export default function AdminPanel() {
   const [pendingProducts, setPendingProducts] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Forms states
@@ -38,6 +41,12 @@ export default function AdminPanel() {
   const [rejectProductId, setRejectProductId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
+
+  // Security Form States
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
   useEffect(() => {
     if (isLoggedIn && role === 'admin') {
@@ -68,6 +77,9 @@ export default function AdminPanel() {
       } else if (activeTab === 'customers') {
         const custRes = await api.get('/admin/customers');
         setCustomers(custRes.data.customers || []);
+      } else if (activeTab === 'orders') {
+        const ordRes = await api.get('/admin/orders');
+        setOrders(ordRes.data.orders || []);
       }
     } catch (err) {
       console.error(err);
@@ -194,123 +206,247 @@ export default function AdminPanel() {
     }).format(amount);
   };
 
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      return toast.error('New passwords do not match');
+    }
+    setPasswordSubmitting(true);
+    try {
+      await api.put('/auth/change-password', { currentPassword, newPassword });
+      toast.success('Admin password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to change password');
+    } finally {
+      setPasswordSubmitting(false);
+    }
+  };
+
+  const handleCardTilt = (e) => {
+    const card = e.currentTarget;
+    const rect = card.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width - 0.5) * 12;
+    const y = ((e.clientY - rect.top) / rect.height - 0.5) * -12;
+    card.style.transform = `perspective(800px) rotateX(${y}deg) rotateY(${x}deg) translateZ(8px)`;
+  };
+  const handleCardReset = (e) => {
+    e.currentTarget.style.transform = '';
+  };
+
   if (!isLoggedIn || role !== 'admin') {
-    return (
-      <div className="max-w-md mx-auto py-20 text-center space-y-6">
-        <ShieldAlert className="text-red-500 mx-auto" size={48} />
-        <h3 className="text-xl font-bold font-display text-[#1e1b4b]">Access Denied</h3>
-        <p className="text-sm text-[#9490b8]">Only platform system administrators have permission to access this page.</p>
-        <Link to="/" className="inline-block bg-gradient-neon text-white font-semibold px-6 py-2.5 rounded-xl text-xs">
-          Return to Homepage
-        </Link>
-      </div>
-    );
+    return <Navigate to="/admin/login" replace />;
   }
 
+  const renderTabTitle = () => {
+    switch (activeTab) {
+      case 'overview': return 'Dashboard Metrics';
+      case 'categories': return 'Category Matrix';
+      case 'sellers': return 'Seller Validation';
+      case 'products': return 'Product Moderation';
+      case 'coupons': return 'Escrow Coupons';
+      case 'customers': return 'Customer Database';
+      case 'orders': return 'Platform Orders';
+      case 'security': return 'Security Settings';
+      default: return 'Admin Portal';
+    }
+  };
+
+  const NAV_ITEMS = [
+    { tab: 'overview', icon: BarChart3, label: 'Dashboard Metrics' },
+    { tab: 'categories', icon: FolderHeart, label: 'Category Matrix' },
+    { tab: 'sellers', icon: Users, label: 'Seller Validation' },
+    { tab: 'products', icon: ListFilter, label: 'Product Moderation' },
+    { tab: 'coupons', icon: Percent, label: 'Escrow Coupons' },
+    { tab: 'customers', icon: Users, label: 'Customer Database' },
+    { tab: 'orders', icon: Package, label: 'Platform Orders' },
+    { tab: 'security', icon: Lock, label: 'Security' },
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 flex flex-col md:flex-row gap-8 items-start">
-      
-      {/* Side Navigation panel */}
-      <div className="w-full md:w-64 flex-shrink-0 glass-panel border-[rgba(99,102,241,0.1)] rounded-2xl p-4 space-y-2">
-        <div className="p-3 border-b border-[rgba(99,102,241,0.1)] flex items-center gap-2 mb-4">
-          <ShieldCheck className="text-[#6366f1]" size={20} />
-          <span className="font-display font-bold text-[#1e1b4b] text-sm">System Admin</span>
+    <>
+      {/* Mobile Hamburger + Header */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 panel-header-light h-14 flex items-center px-4 gap-3">
+        <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl hover:bg-[rgba(91,33,182,0.06)] transition-colors">
+          <Menu size={20} className="text-[#5b21b6]" />
+        </button>
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center">
+            <span className="text-white font-bold text-sm">S</span>
+          </div>
+          <span className="font-display font-bold text-base text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span></span>
         </div>
-
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 cursor-pointer ${
-            activeTab === 'overview' ? 'bg-gradient-neon text-white font-bold' : 'text-[#9490b8] hover:bg-white/5 hover:text-[#1e1b4b]'
-          }`}
-        >
-          <BarChart3 size={16} />
-          Dashboard Metrics
-        </button>
-
-        <button
-          onClick={() => setActiveTab('categories')}
-          className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 cursor-pointer ${
-            activeTab === 'categories' ? 'bg-gradient-neon text-white font-bold' : 'text-[#9490b8] hover:bg-white/5 hover:text-[#1e1b4b]'
-          }`}
-        >
-          <FolderHeart size={16} />
-          Category Matrix
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sellers')}
-          className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 cursor-pointer ${
-            activeTab === 'sellers' ? 'bg-gradient-neon text-white font-bold' : 'text-[#9490b8] hover:bg-white/5 hover:text-[#1e1b4b]'
-          }`}
-        >
-          <Users size={16} />
-          Seller Validation
-        </button>
-
-        <button
-          onClick={() => setActiveTab('products')}
-          className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 cursor-pointer ${
-            activeTab === 'products' ? 'bg-gradient-neon text-white font-bold' : 'text-[#9490b8] hover:bg-white/5 hover:text-[#1e1b4b]'
-          }`}
-        >
-          <ListFilter size={16} />
-          Product Moderation
-        </button>
-
-        <button
-          onClick={() => setActiveTab('coupons')}
-          className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 cursor-pointer ${
-            activeTab === 'coupons' ? 'bg-gradient-neon text-white font-bold' : 'text-[#9490b8] hover:bg-white/5 hover:text-[#1e1b4b]'
-          }`}
-        >
-          <Percent size={16} />
-          Escrow Coupons
-        </button>
-
-        <button
-          onClick={() => setActiveTab('customers')}
-          className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 cursor-pointer ${
-            activeTab === 'customers' ? 'bg-gradient-neon text-white font-bold' : 'text-[#9490b8] hover:bg-white/5 hover:text-[#1e1b4b]'
-          }`}
-        >
-          <Users size={16} />
-          Customer Database
-        </button>
       </div>
 
-      {/* Main Contents Panel */}
-      <div className="flex-grow w-full space-y-6">
+      {/* Mobile Drawer Overlay */}
+      {sidebarOpen && (
+        <>
+          <div className="drawer-overlay lg:hidden" onClick={() => setSidebarOpen(false)} />
+          <div className="drawer-panel sidebar-light lg:hidden flex flex-col">
+            <div className="h-14 flex items-center px-5 border-b border-[rgba(91,33,182,0.08)]">
+              <span className="font-display font-bold text-base text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span> Admin</span>
+            </div>
+            <div className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+              <div className="text-[9px] font-black uppercase text-[#c4c0d8] tracking-[0.15em] px-3 py-3">System</div>
+              {NAV_ITEMS.map((item, i) => (
+                <button
+                  key={item.tab}
+                  onClick={() => { setActiveTab(item.tab); setSidebarOpen(false); }}
+                  className={`nav-item-light stagger-${i+1} ${activeTab === item.tab ? 'active' : ''}`}
+                >
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-all ${
+                    activeTab === item.tab
+                      ? 'bg-[#5b21b6] text-white shadow-md shadow-violet-500/25'
+                      : 'bg-[rgba(91,33,182,0.06)] text-[#9490b8]'
+                  }`}>
+                    <item.icon size={15} />
+                  </div>
+                  <span className="flex-1">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Desktop Layout */}
+      <div className="flex h-screen overflow-hidden" style={{
+        background: `
+          radial-gradient(ellipse 60% 50% at 10% 10%, rgba(91,33,182,0.06) 0%, transparent 60%),
+          radial-gradient(ellipse 50% 60% at 90% 90%, rgba(240,80,53,0.05) 0%, transparent 55%),
+          radial-gradient(ellipse 70% 40% at 50% 50%, rgba(245,158,11,0.04) 0%, transparent 70%),
+          #faf8f4
+        `
+      }}>
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:flex w-60 xl:w-64 flex-shrink-0 sidebar-light flex-col relative overflow-hidden">
+          <div className="orb-ambient w-48 h-48 bg-violet-200/30 -top-12 -left-12" style={{ animationDelay: '-3s' }} />
+
+          {/* Logo */}
+          <div className="h-16 flex items-center px-5 border-b border-[rgba(91,33,182,0.08)] relative z-10">
+            <Link to="/" className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <span className="text-white font-bold text-base">S</span>
+              </div>
+              <div>
+                <div className="font-display font-black text-sm text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span></div>
+                <div className="text-[8px] font-bold uppercase text-[#9490b8] tracking-widest">Admin Portal</div>
+              </div>
+            </Link>
+          </div>
+
+          {/* Nav items */}
+          <div className="flex-1 p-3 space-y-0.5 overflow-y-auto relative z-10">
+            <div className="text-[9px] font-black uppercase text-[#c4c0d8] tracking-[0.15em] px-3 py-3">System</div>
+            {NAV_ITEMS.map((item, i) => (
+              <button
+                key={item.tab}
+                onClick={() => setActiveTab(item.tab)}
+                className={`nav-item-light animate-nav-slide stagger-${i+1} ${activeTab === item.tab ? 'active' : ''}`}
+              >
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-all ${
+                  activeTab === item.tab
+                    ? 'bg-[#5b21b6] text-white shadow-md shadow-violet-500/25'
+                    : 'bg-[rgba(91,33,182,0.06)] text-[#9490b8]'
+                }`}>
+                  <item.icon size={15} />
+                </div>
+                <span className="flex-1">{item.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Bottom user strip */}
+          <div className="p-3 border-t border-[rgba(91,33,182,0.08)] relative z-10">
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-[rgba(91,33,182,0.04)] border border-[rgba(91,33,182,0.08)]">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center text-white text-xs font-black">A</div>
+              <div>
+                <div className="text-xs font-bold text-[#12100e]">System Admin</div>
+                <div className="text-[9px] text-[#9490b8]">Full Access</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-h-screen overflow-hidden pt-14 lg:pt-0">
+          {/* Desktop Header */}
+          <header className="hidden lg:flex panel-header-light h-16 items-center justify-between px-6 xl:px-8 flex-shrink-0 z-10">
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col">
+                <h1 className="text-base font-display font-black text-[#12100e] leading-none">{renderTabTitle()}</h1>
+                <p className="text-[10px] text-[#9490b8] font-medium mt-0.5">Slabofy Administration</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={fetchAdminData} className="p-2.5 rounded-xl bg-[rgba(91,33,182,0.06)] hover:bg-[rgba(91,33,182,0.12)] transition-colors text-[#5b21b6]">
+                <RefreshCw size={15} />
+              </button>
+              <div className="flex items-center gap-2.5 bg-[rgba(91,33,182,0.04)] border border-[rgba(91,33,182,0.1)] rounded-2xl px-3 py-2">
+                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center text-white text-xs font-black">A</div>
+                <span className="text-xs font-bold text-[#12100e]">Admin</span>
+              </div>
+            </div>
+          </header>
+
+          {/* Scrollable Main Area */}
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-24 lg:pb-8 w-full max-w-[1400px] mx-auto">
+            <div className="w-full space-y-6">
         
         {/* Loading Indicator */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-40 gap-4">
-            <RefreshCw className="animate-spin text-[#6366f1]" size={32} />
-            <p className="text-sm text-[#9490b8]">Fetching administrative state...</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 animate-fade-in">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="skeleton h-32 rounded-2xl" />
+            ))}
           </div>
         ) : (
           /* Dynamic Tabs Render */
           <>
             {/* OVERVIEW PANEL */}
             {activeTab === 'overview' && stats && (
-              <div className="space-y-6 animate-fade-in">
+              <div key={activeTab} className="space-y-6 animate-tab-morph">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Platform KPIs</h2>
-                  <button onClick={fetchAdminData} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-[#9490b8] hover:text-[#1e1b4b] cursor-pointer"><RefreshCw size={16} /></button>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="glass-panel border-[rgba(99,102,241,0.1)] rounded-2xl p-6 shadow-xl">
-                    <span className="text-[10px] text-[#b4b0d0] font-bold block uppercase tracking-wider">Gross Merchandise Volume (GMV)</span>
-                    <span className="text-2xl font-extrabold text-[#6366f1] font-display mt-2 block">{formatCurrency(stats.totalRevenue)}</span>
-                  </div>
-                  <div className="glass-panel border-[rgba(99,102,241,0.1)] rounded-2xl p-6 shadow-xl">
-                    <span className="text-[10px] text-[#b4b0d0] font-bold block uppercase tracking-wider">Completed Deals</span>
-                    <span className="text-2xl font-extrabold text-emerald-400 font-display mt-2 block">{stats.completedDeals} deals</span>
-                  </div>
-                  <div className="glass-panel border-[rgba(99,102,241,0.1)] rounded-2xl p-6 shadow-xl">
-                    <span className="text-[10px] text-[#b4b0d0] font-bold block uppercase tracking-wider">Active Deals Room</span>
-                    <span className="text-2xl font-extrabold text-brand-gold font-display mt-2 block">{stats.activeGroups} active</span>
-                  </div>
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {[
+                    { label: 'GMV', value: formatCurrency(stats.totalRevenue), icon: TrendingUp, color: '#5b21b6', bg: 'rgba(91,33,182,0.1)', orbColor: 'rgba(91,33,182,0.15)' },
+                    { label: 'Completed Deals', value: `${stats.completedDeals}`, icon: CheckCircle2, color: '#059669', bg: 'rgba(5,150,105,0.1)', orbColor: 'rgba(5,150,105,0.12)' },
+                    { label: 'Active Groups', value: `${stats.activeGroups}`, icon: Users, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', orbColor: 'rgba(245,158,11,0.12)' },
+                    { label: 'Pending Review', value: `${stats.pendingProducts}`, icon: Clock, color: '#f05035', bg: 'rgba(240,80,53,0.1)', orbColor: 'rgba(240,80,53,0.12)' },
+                  ].map((item, i) => (
+                    <div
+                      key={i}
+                      className={`stat-card-v2 animate-spring-up stagger-${i+1} card-3d`}
+                      onMouseMove={handleCardTilt}
+                      onMouseLeave={handleCardReset}
+                    >
+                      {/* Ambient corner orb */}
+                      <div style={{
+                        position: 'absolute', top: -30, right: -30,
+                        width: 120, height: 120, borderRadius: '50%',
+                        background: item.orbColor, filter: 'blur(30px)', pointerEvents: 'none'
+                      }} />
+                      {/* Shine overlay */}
+                      <div className="card-3d-shine" />
+                      {/* Content */}
+                      <div className="relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                          <div style={{ background: item.bg, color: item.color, padding: '8px', borderRadius: '12px', display: 'inline-flex' }}>
+                            <item.icon size={18} />
+                          </div>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.color, boxShadow: `0 0 8px ${item.color}` }} />
+                        </div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#9490b8] mb-1">{item.label}</div>
+                        <div className="text-2xl font-black font-display text-[#12100e] animate-stat-reveal">{item.value}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#faf8f4] border border-gray-200 rounded-2xl p-6">
@@ -332,7 +468,7 @@ export default function AdminPanel() {
 
             {/* CATEGORIES MATRIX */}
             {activeTab === 'categories' && (
-              <div className="space-y-6 animate-fade-in">
+              <div key={activeTab} className="space-y-6 animate-tab-morph">
                 <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Categories Management</h2>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -387,7 +523,7 @@ export default function AdminPanel() {
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-xs">
                         {categories.map((cat) => (
-                          <tr key={cat.id} className="hover:bg-gray-50 transition-colors">
+                          <tr key={cat.id} className="table-row-v2 hover:bg-gray-50 transition-colors">
                             <td className="py-3.5 px-5 font-mono text-[#6b6560]">{cat.id}</td>
                             <td className="py-3.5 px-5 font-semibold text-[#12100e]">{cat.name}</td>
                             <td className="py-3.5 px-5 text-[#5b21b6]">{cat.commission_pct}%</td>
@@ -411,7 +547,7 @@ export default function AdminPanel() {
 
             {/* SELLER APPROVALS QUEUE */}
             {activeTab === 'sellers' && (
-              <div className="space-y-6 animate-fade-in">
+              <div key={activeTab} className="space-y-6 animate-tab-morph">
                 <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Merchant Enrollment Queue</h2>
 
                 {sellers.length === 0 ? (
@@ -434,10 +570,25 @@ export default function AdminPanel() {
                             </span>
                           </div>
                           <p className="text-xs text-[#9490b8] font-medium">Owner: {sel.name} | Phone: {sel.phone} | Email: {sel.email || 'N/A'}</p>
-                          <div className="flex flex-wrap gap-x-4 text-[10px] text-[#b4b0d0] mt-2 font-mono">
+                          <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] text-[#b4b0d0] mt-2 font-mono">
+                            <span>Type: {sel.business_type || 'N/A'}</span>
                             <span>GSTIN: {sel.gstin || 'N/A'}</span>
-                            <span>Bank Account: {sel.bank_account || 'N/A'}</span>
+                            <span>PAN: {sel.pan_number || 'N/A'}</span>
+                            <span>AADHAR: {sel.aadhar_number || 'N/A'}</span>
+                            <span className="w-full">Address: {sel.business_address || 'N/A'}</span>
+                            <span>Bank A/C: {sel.bank_account || 'N/A'}</span>
                             <span>IFSC: {sel.ifsc || 'N/A'}</span>
+                            
+                            {sel.kyc_document_url && (
+                              <a 
+                                href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${sel.kyc_document_url}`} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="text-[#4338ca] hover:underline font-bold flex items-center gap-1"
+                              >
+                                View KYC Document
+                              </a>
+                            )}
                           </div>
                         </div>
 
@@ -469,7 +620,7 @@ export default function AdminPanel() {
 
             {/* PRODUCT APPROVALS QUEUE */}
             {activeTab === 'products' && (
-              <div className="space-y-6 animate-fade-in">
+              <div key={activeTab} className="space-y-6 animate-tab-morph">
                 <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Product Listing Queue</h2>
 
                 {pendingProducts.length === 0 ? (
@@ -493,6 +644,14 @@ export default function AdminPanel() {
                             <h3 className="text-base font-bold text-[#1e1b4b] leading-snug">{prod.name}</h3>
                             <p className="text-xs text-[#9490b8] line-clamp-2 leading-relaxed">{prod.description}</p>
                             <span className="text-[10px] text-[#b4b0d0] font-mono block">SKU: {prod.sku || 'N/A'} | Init Stock: {prod.stock}</span>
+                            <div className="flex gap-2 mt-2 pt-1">
+                              <span className="text-[9px] font-bold text-[#5b21b6] bg-[rgba(91,33,182,0.08)] border border-[rgba(91,33,182,0.2)] px-2 py-1 rounded-lg">
+                                Max {prod.max_group_size} members
+                              </span>
+                              <span className="text-[9px] font-bold text-[#b45309] bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.2)] px-2 py-1 rounded-lg">
+                                {prod.group_window_hours}h window
+                              </span>
+                            </div>
                           </div>
                         </div>
 
@@ -536,7 +695,7 @@ export default function AdminPanel() {
 
             {/* ESCROW COUPONS MANAGER */}
             {activeTab === 'coupons' && (
-              <div className="space-y-6 animate-fade-in">
+              <div key={activeTab} className="space-y-6 animate-tab-morph">
                 <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Escrow Promo Coupons</h2>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -549,7 +708,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] text-[#9490b8] font-semibold uppercase">Coupon Code</label>
                         <input
                           type="text"
-                          placeholder="e.g. SOCIAL50"
+                          placeholder="e.g. SLABOFY50"
                           value={couponCode}
                           onChange={(e) => setCouponCode(e.target.value)}
                           className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2 px-3 text-[#1e1b4b] uppercase"
@@ -627,7 +786,7 @@ export default function AdminPanel() {
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-xs">
                         {coupons.map((c) => (
-                          <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                          <tr key={c.id} className="table-row-v2 hover:bg-gray-50 transition-colors">
                             <td className="py-3.5 px-5 font-mono font-bold text-[#12100e]">{c.code}</td>
                             <td className="py-3.5 px-5 text-[#5b21b6]">
                               {c.discount_type === 'flat' ? `${formatCurrency(c.discount_value)} Flat` : `${c.discount_value}% Discount`}
@@ -662,7 +821,7 @@ export default function AdminPanel() {
 
             {/* CUSTOMERS DATABASE VIEW */}
             {activeTab === 'customers' && (
-              <div className="space-y-6 animate-fade-in">
+              <div key={activeTab} className="space-y-6 animate-tab-morph">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Customer Database</h2>
                   <button onClick={fetchAdminData} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-[#9490b8] hover:text-[#1e1b4b] cursor-pointer"><RefreshCw size={16} /></button>
@@ -689,7 +848,7 @@ export default function AdminPanel() {
                         </tr>
                       ) : (
                         customers.map((c) => (
-                          <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                          <tr key={c.id} className="table-row-v2 hover:bg-gray-50 transition-colors">
                             <td className="py-4 px-5 font-mono text-[#6b6560]">#{c.id}</td>
                             <td className="py-4 px-5">
                               <span className="font-bold text-[#12100e] block">{c.name}</span>
@@ -724,9 +883,141 @@ export default function AdminPanel() {
                 </div>
               </div>
             )}
+
+            {/* PLATFORM ORDERS */}
+            {activeTab === 'orders' && (
+              <div key={activeTab} className="space-y-6 animate-tab-morph">
+                <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Global Network Orders</h2>
+                
+                <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
+                  <table className="w-full text-left border-collapse bg-white whitespace-nowrap">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-[10px] font-bold text-[#6b6560] uppercase tracking-wider bg-[#faf8f4]">
+                        <th className="py-4 px-5">Order ID & Date</th>
+                        <th className="py-4 px-5">Buyer</th>
+                        <th className="py-4 px-5">Merchant</th>
+                        <th className="py-4 px-5">Item / Qty</th>
+                        <th className="py-4 px-5">Buy Type</th>
+                        <th className="py-4 px-5">Financials</th>
+                        <th className="py-4 px-5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-xs">
+                      {orders.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" className="py-8 text-center text-gray-400">No platform orders found.</td>
+                        </tr>
+                      ) : (
+                        orders.map((o) => (
+                          <tr key={o.id} className="table-row-v2 hover:bg-gray-50 transition-colors">
+                            <td className="py-4 px-5">
+                              <span className="block font-mono text-[10px] text-[#12100e] font-bold">#{o.id}</span>
+                              <span className="block text-[#6b6560] text-[10px] mt-0.5">
+                                {new Date(o.created_at).toLocaleDateString()}
+                              </span>
+                            </td>
+                            <td className="py-4 px-5">
+                              <span className="block font-bold text-[#1e1b4b]">{o.buyer_name}</span>
+                              <span className="block text-[#6b6560] text-[10px] mt-0.5 font-mono">{o.buyer_phone}</span>
+                            </td>
+                            <td className="py-4 px-5 font-semibold text-[#1e1b4b]">
+                              {o.seller_business_name}
+                            </td>
+                            <td className="py-4 px-5">
+                              <span className="block font-semibold text-[#5b21b6]">{o.product_name}</span>
+                              <span className="block text-[#6b6560] text-[10px] mt-0.5 font-mono">Qty: {o.quantity} | {o.product_sku}</span>
+                            </td>
+                            <td className="py-4 px-5">
+                              {!o.group_id ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 uppercase">
+                                  Solo Order
+                                </span>
+                              ) : (
+                                <div>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-brand-gold/20 text-brand-gold uppercase">
+                                    Group ({o.group_target_size})
+                                  </span>
+                                  <span className="block text-[10px] text-[#9490b8] mt-1 font-semibold uppercase">
+                                    Status: {o.group_status}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-4 px-5">
+                              <span className="block font-bold text-[#f05035]">{formatCurrency(o.total_amount)}</span>
+                              <span className="block text-[#6b6560] text-[10px] mt-0.5 font-bold uppercase">
+                                Cut: {o.commission_pct}%
+                              </span>
+                            </td>
+                            <td className="py-4 px-5">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
+                                o.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                                o.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                                o.status === 'shipped' ? 'bg-purple-100 text-purple-700' :
+                                o.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                                'bg-red-100 text-red-700'
+                              }`}>
+                                {o.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {/* SECURITY SETTINGS */}
+            {activeTab === 'security' && (
+              <div className="max-w-2xl animate-fade-in space-y-6">
+                <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Security Settings</h2>
+                <div className="glass-panel border-[rgba(99,102,241,0.1)] rounded-3xl p-6 md:p-8 shadow-xl">
+                  <h3 className="text-lg font-bold font-display text-[#1e1b4b] mb-6 flex items-center gap-2 border-b border-gray-100 pb-4">
+                    <Lock className="text-[#6366f1]" size={20} />
+                    Change Admin Password
+                  </h3>
+                  <form onSubmit={handleChangePassword} className="space-y-4">
+                    <input
+                      type="password"
+                      placeholder="Current Password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-3 px-4 text-sm text-[#1e1b4b]"
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="New Password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-3 px-4 text-sm text-[#1e1b4b]"
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="Confirm New Password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-3 px-4 text-sm text-[#1e1b4b]"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={passwordSubmitting}
+                      className="w-full bg-[#1e1b4b] text-white font-bold rounded-xl py-3.5 mt-4 hover:bg-[#2d2966] disabled:opacity-50 transition-colors cursor-pointer"
+                    >
+                      {passwordSubmitting ? 'Updating...' : 'Change Password'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
           </>
         )}
 
+          </div>
+        </div>
       </div>
 
       {/* REJECT PRODUCT MODAL */}
@@ -771,5 +1062,6 @@ export default function AdminPanel() {
       )}
 
     </div>
+    </>
   );
 }

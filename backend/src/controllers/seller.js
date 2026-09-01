@@ -29,7 +29,7 @@ export const registerSeller = async (req, res) => {
     
     // Notify Admin via email (Mock)
     await sendEmail(
-      'admin@socialgroupbuying.com',
+      'admin@slabofy.com',
       'New Seller Registration Pending Approval',
       'new_seller_registration',
       { userId, business_name }
@@ -103,10 +103,12 @@ export const getSellerOrders = async (req, res) => {
   try {
     let query = `
       SELECT o.*, p.name as product_name, p.sku as product_sku,
-             u.name as buyer_name, u.phone as buyer_phone
+             u.name as buyer_name, u.phone as buyer_phone,
+             g.target_size as group_target_size, g.current_size as group_current_size, g.status as group_status
       FROM orders o
       JOIN products p ON o.product_id = p.id
       JOIN users u ON o.buyer_id = u.id
+      LEFT JOIN groups g ON o.group_id = g.id
       WHERE o.seller_id = $1
     `;
     const queryParams = [sellerId];
@@ -184,7 +186,16 @@ export const shipOrder = async (req, res) => {
 export const getSellerProfile = async (req, res) => {
   const userId = req.user.id;
   try {
-    const result = await pool.query('SELECT * FROM seller_profiles WHERE user_id = $1', [userId]);
+    const query = `
+      SELECT u.name, u.email, u.phone, u.role, u.is_verified, u.created_at,
+             sp.business_name, sp.business_type, sp.business_address,
+             sp.gstin, sp.pan_number, sp.aadhar_number, sp.bank_account, sp.ifsc,
+             sp.kyc_document_url, sp.is_approved
+      FROM users u
+      LEFT JOIN seller_profiles sp ON u.id = sp.user_id
+      WHERE u.id = $1
+    `;
+    const result = await pool.query(query, [userId]);
     return res.status(200).json({ profile: result.rows[0] || null });
   } catch (error) {
     console.error('Error in getSellerProfile:', error.message);

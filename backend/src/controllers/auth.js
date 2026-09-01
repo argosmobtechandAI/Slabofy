@@ -67,7 +67,7 @@ export const sendOtp = async (req, res) => {
  * BE-02: Verify OTP and Issue JWT
  */
 export const verifyOtp = async (req, res) => {
-  const { phone, otp } = req.body;
+  const { phone, otp, name } = req.body;
   if (!phone || !otp) {
     return res.status(400).json({ error: 'Phone and OTP are required' });
   }
@@ -93,20 +93,30 @@ export const verifyOtp = async (req, res) => {
 
     // If user does not exist, create a new record (Auto-Register)
     if (!user) {
-      const defaultName = `User_${phone.slice(-4)}`;
+      const defaultName = (name && name.trim() !== '') ? name.trim() : `User_${phone.slice(-4)}`;
       const newUserResult = await pool.query(
         'INSERT INTO users (name, phone, role, is_verified) VALUES ($1, $2, $3, $4) RETURNING *',
         [defaultName, phone, 'user', true]
       );
       user = newUserResult.rows[0];
       console.log(`[AUTO-REGISTERED] New User: ${user.name} | Phone: ${user.phone}`);
-    } else if (!user.is_verified) {
-      // Mark as verified if they weren't already
-      const updatedUser = await pool.query(
-        'UPDATE users SET is_verified = true WHERE id = $1 RETURNING *',
-        [user.id]
-      );
-      user = updatedUser.rows[0];
+    } else {
+      let shouldUpdate = false;
+      let newName = user.name;
+      
+      if (!user.is_verified) shouldUpdate = true;
+      if (name && name.trim() !== '' && user.name.startsWith('User_')) {
+        newName = name.trim();
+        shouldUpdate = true;
+      }
+
+      if (shouldUpdate) {
+        const updatedUser = await pool.query(
+          'UPDATE users SET is_verified = true, name = $1 WHERE id = $2 RETURNING *',
+          [newName, user.id]
+        );
+        user = updatedUser.rows[0];
+      }
     }
 
     // Issue JWT token (7 days expiry)
@@ -461,3 +471,183 @@ export const resetPassword = async (req, res) => {
   }
 };
 
+
+/**
+ * Register Seller (Combined User & Seller Profile)
+ */
+export const sellerSignup = async (req, res) => {
+  const { 
+    name, email, phone, password, 
+    business_name, business_type, gstin, pan_number, aadhar_number, business_address, bank_account, ifsc, kyc_document_url
+  } = req.body;
+
+  if (!name || !email || !phone || !password || !business_name || !pan_number || !aadhar_number) {
+    return res.status(400).json({ error: 'Required fields missing for seller signup' });
+  }
+
+  // Format validation for Indian phone numbers (+91 prefix)
+  const phoneRegex = /^\+91[6-9]\d{9}$/;
+  let formattedPhone = phone.trim();
+  if (!phoneRegex.test(formattedPhone)) {
+    if (formattedPhone.length === 10 && !formattedPhone.startsWith('+91')) {
+      formattedPhone = `+91${formattedPhone}`;
+    } else {
+      return res.status(400).json({ error: 'Invalid phone format. Must be a valid 10-digit number' });
+    }
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Check if email already exists
+    const emailCheck = await client.query('SELECT id FROM users WHERE email = $1', [email.trim().toLowerCase()]);
+    if (emailCheck.rowCount > 0) {
+      throw new Error('Email address is already registered');
+    }
+
+    // Check if phone already exists
+    const phoneCheck = await client.query('SELECT id FROM users WHERE phone = $1', [formattedPhone]);
+    if (phoneCheck.rowCount > 0) {
+      throw new Error('Phone number is already registered');
+    }
+
+    // Hash the password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    // Insert user (they start as 'user', become 'seller' when admin approves, or we can make them 'user' and use the seller_profiles table to know they are a seller applicant)
+    const insertUserQuery = `
+      INSERT INTO users (name, email, phone, password_hash, role, is_verified)
+      VALUES ($1, $2, $3, $4, 'user', true)
+      RETURNING id, name, email, phone, role
+    `;
+    const userResult = await client.query(insertUserQuery, [
+      name.trim(),
+      email.trim().toLowerCase(),
+      formattedPhone,
+      passwordHash
+    ]);
+    const user = userResult.rows[0];
+
+    // Insert seller profile
+    const insertSellerQuery = `
+      INSERT INTO seller_profiles 
+      (user_id, business_name, business_type, business_address, gstin, pan_number, aadhar_number, kyc_document_url, bank_account, ifsc, is_approved)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
+    `;
+    await client.query(insertSellerQuery, [
+      user.id, business_name, business_type, business_address, gstin, pan_number, aadhar_number, kyc_document_url, bank_account, ifsc
+    ]);
+
+    await client.query('COMMIT');
+
+    // Issue JWT token
+    const token = jwt.sign(
+      { id: user.id, role: user.role, phone: user.phone },
+      process.env.JWT_SECRET || 'supersecretjwtkeychangeinprod',
+      { expiresIn: '7d' }
+    );
+
+    return res.status(201).json({
+      token,
+      user
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in sellerSignup:', error.message);
+    if (error.message === 'Email address is already registered' || error.message === 'Phone number is already registered') {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Server error registering seller account' });
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Change Password (Protected)
+ */
+export const changePassword = async (req, res) => {
+  const userId = req.user.id;
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Current and new passwords are required' });
+  }
+
+  try {
+    const userRes = await pool.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+    const user = userRes.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!user.password_hash) {
+      return res.status(400).json({ error: 'Password not set. Cannot change.' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Incorrect current password' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const newPasswordHash = await bcrypt.hash(newPassword, salt);
+
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newPasswordHash, userId]);
+
+    return res.status(200).json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Error in changePassword:', error.message);
+    return res.status(500).json({ error: 'Server error updating password' });
+  }
+};
+
+/**
+ * Delete Account (Protected - Only Seller/Customer)
+ * Soft-delete implementation for referential integrity.
+ */
+export const deleteAccount = async (req, res) => {
+  const userId = req.user.id;
+  const role = req.user.role;
+
+  if (role === 'admin') {
+    return res.status(403).json({ error: 'Admin accounts cannot be deleted to prevent system lockout.' });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    
+    // Anonymize user logic (Soft delete)
+    const deletedEmail = `deleted_${userId}@slabofy.com`;
+    const deletedPhone = `+91000${userId.toString().padStart(7, '0')}`;
+    
+    const updateUserQuery = `
+      UPDATE users 
+      SET name = 'Deleted User', email = $1, phone = $2, password_hash = NULL, is_verified = false, fcm_token = NULL 
+      WHERE id = $3
+    `;
+    await client.query(updateUserQuery, [deletedEmail, deletedPhone, userId]);
+
+    if (role === 'seller') {
+      // Mark seller profile as inactive/unapproved and anonymize if needed
+      await client.query('UPDATE seller_profiles SET is_approved = false, business_name = $1, gstin = NULL, pan_number = NULL, aadhar_number = NULL, bank_account = NULL WHERE user_id = $2', [`Deleted Business ${userId}`, userId]);
+      // Deactivate all products belonging to this seller
+      await client.query("UPDATE products SET status = 'rejected' WHERE seller_id = $1", [userId]);
+    }
+
+    await client.query('COMMIT');
+    return res.status(200).json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in deleteAccount:', error.message);
+    return res.status(500).json({ error: 'Server error deleting account' });
+  } finally {
+    client.release();
+  }
+};

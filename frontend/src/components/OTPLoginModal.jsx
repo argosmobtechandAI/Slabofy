@@ -15,6 +15,7 @@ export default function OTPLoginModal({ isOpen, onClose }) {
   
   // OTP state
   const [phone, setPhone] = useState('');
+  const [otpName, setOtpName] = useState('');
   const [otp, setOtp] = useState('');
   const [resendTimer, setResendTimer] = useState(30);
   const [sending, setSending] = useState(false);
@@ -97,7 +98,7 @@ export default function OTPLoginModal({ isOpen, onClose }) {
 
     setVerifying(true);
     try {
-      const user = await login(phone, otp);
+      const user = await login(phone, otp, otpName);
       onClose();
       if (user.role === 'admin') {
         window.location.href = '/admin';
@@ -298,7 +299,7 @@ export default function OTPLoginModal({ isOpen, onClose }) {
             
             <div className="space-y-1">
               <h3 className="text-lg font-bold text-[#1e1b4b]">Choose a Google Account</h3>
-              <p className="text-xs text-[#9490b8]">to continue to SocialGroup Buying</p>
+              <p className="text-xs text-[#9490b8]">to continue to Slabofy</p>
             </div>
 
             <div className="space-y-3 mt-4 text-left">
@@ -429,37 +430,21 @@ export default function OTPLoginModal({ isOpen, onClose }) {
                   <span className="relative bg-white px-3 text-[10px] uppercase font-bold text-[#b4b0d0] tracking-wider">or</span>
                 </div>
 
-                <div className="space-y-3">
+                <div className="flex gap-4">
                   <button
                     type="button"
-                    onClick={() => setGoogleChooserOpen(true)}
-                    className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] text-[#1e1b4b] font-medium rounded-xl py-3.5 flex items-center justify-center gap-3 hover:bg-[#eeedf3] transition-all active:scale-[0.98] cursor-pointer"
+                    onClick={() => setMode('email-login')}
+                    className="flex-1 py-3 border border-[rgba(99,102,241,0.15)] rounded-xl font-bold text-xs text-[#1e1b4b] hover:bg-[#f8f7ff] transition-colors cursor-pointer"
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24">
-                      <path
-                        fill="#EA4335"
-                        d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.866-3.577-7.866-8s3.536-8 7.866-8c2.46 0 4.105 1.025 5.047 1.926l3.245-3.12C18.465 1.77 15.62 1 12.24 1 5.923 1 12 5.923 1 12s4.923 11 11.24 11c6.6 0 11-4.647 11-11.2 0-.756-.08-1.336-.183-1.8H12.24z"
-                      />
-                    </svg>
-                    Continue with Google
+                    Email Login
                   </button>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setMode('email-login')}
-                      className="w-1/2 bg-white/5 border border-[rgba(99,102,241,0.15)] text-[#1e1b4b] font-semibold rounded-xl py-3 text-xs hover:bg-white/10 transition-colors cursor-pointer"
-                    >
-                      Email Login
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMode('email-signup')}
-                      className="w-1/2 bg-white/5 border border-[rgba(99,102,241,0.15)] text-[#1e1b4b] font-semibold rounded-xl py-3 text-xs hover:bg-white/10 transition-colors cursor-pointer"
-                    >
-                      Create Account
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMode('email-signup')}
+                    className="flex-1 py-3 border border-[rgba(99,102,241,0.15)] rounded-xl font-bold text-xs text-[#1e1b4b] hover:bg-[#f8f7ff] transition-colors cursor-pointer"
+                  >
+                    Create Account
+                  </button>
                 </div>
               </div>
             )}

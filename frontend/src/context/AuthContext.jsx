@@ -40,9 +40,9 @@ export const AuthProvider = ({ children }) => {
   /**
    * Verify OTP and Login / Register user
    */
-  const login = async (phone, otp) => {
+  const login = async (phone, otp, name) => {
     try {
-      const res = await api.post('/auth/verify-otp', { phone, otp });
+      const res = await api.post('/auth/verify-otp', { phone, otp, name });
       const { token, user } = res.data;
 
       localStorage.setItem('token', token);

@@ -13,7 +13,7 @@ export default function Checkout() {
   const { user } = useAuth();
   
   // Extract checkout parameters from router navigation state
-  const { product_id, group_id, target_size } = location.state || {};
+  const { product_id, group_id, target_size, variant_id, color, size } = location.state || {};
 
   const [product, setProduct] = useState(null);
   const [selectedPrice, setSelectedPrice] = useState(0);
@@ -123,6 +123,9 @@ export default function Checkout() {
         product_id,
         group_id,
         target_size,
+        variant_id,
+        color,
+        size,
         shipping_address: fullAddress,
         pincode: zipCode,
         coupon_code: appliedCoupon ? appliedCoupon.code : undefined
@@ -150,6 +153,9 @@ export default function Checkout() {
         product_id,
         group_id,
         target_size,
+        variant_id,
+        color,
+        size,
         shipping_address: fullAddress,
         coupon_code: appliedCoupon ? appliedCoupon.code : undefined
       };
@@ -186,7 +192,7 @@ export default function Checkout() {
         key: key_id,
         amount: Math.round(amount * 100),
         currency: 'INR',
-        name: 'SocialGroup Buying',
+        name: 'Slabofy',
         description: `Hold pre-authorization for ${target_size}-member co-buy`,
         order_id: razorpay_order_id,
         
@@ -272,7 +278,7 @@ export default function Checkout() {
   };
 
   return (
-    <div style={{ background: '#faf8f4', minHeight: '100vh' }}>
+    <div className="mesh-violet" style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '24px 24px 80px' }}>
 
         {/* Back nav */}
@@ -289,9 +295,7 @@ export default function Checkout() {
           <div style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(18,16,14,0.08)', padding: '32px 32px', boxShadow: '0 4px 24px rgba(18,16,14,0.06)' }}>
 
             <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.25rem', color: '#12100e', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(91,33,182,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <MapPin size={18} color="#5b21b6" />
-              </div>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #5b21b6, #4338ca)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: '0.9rem', flexShrink: 0 }}>1</div>
               Delivery Information
             </h2>
 
@@ -349,7 +353,10 @@ export default function Checkout() {
 
                 {/* Payment Method */}
                 <div style={{ paddingTop: 8 }}>
-                  <label style={labelStyle}>Payment Method</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #f05035, #f59e0b)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: '0.9rem', flexShrink: 0 }}>2</div>
+                    <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1rem', color: '#12100e' }}>Payment Method</span>
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                     {[
                       { value: 'online', title: 'Pre-Auth Card / UPI', desc: 'Card held, captured only when team fills.', accent: '#5b21b6' },
@@ -439,7 +446,12 @@ export default function Checkout() {
                   <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: '#12100e', marginBottom: 4, lineHeight: 1.3, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                     {product.name}
                   </h4>
-                  <p style={{ fontSize: '0.68rem', color: '#a09a94', marginBottom: 8, fontFamily: 'JetBrains Mono, monospace' }}>SKU: {product.sku || 'N/A'}</p>
+                  <p style={{ fontSize: '0.68rem', color: '#a09a94', marginBottom: (color || size) ? 4 : 8, fontFamily: 'JetBrains Mono, monospace' }}>SKU: {product.sku || 'N/A'}</p>
+                  {(color || size) && (
+                    <p style={{ fontSize: '0.68rem', color: '#6b6560', marginBottom: 8, fontWeight: 600 }}>
+                      {color && `Color: ${color}`}{color && size && ' · '}{size && `Size: ${size}`}
+                    </p>
+                  )}
                   <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#5b21b6', background: 'rgba(91,33,182,0.08)', border: '1px solid rgba(91,33,182,0.15)', padding: '3px 10px', borderRadius: 999 }}>
                     {target_size === 1 ? 'Solo Buyer' : `${target_size}-Member Team`}
                   </span>

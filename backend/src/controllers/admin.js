@@ -412,3 +412,30 @@ export const getCustomers = async (req, res) => {
     return res.status(500).json({ error: 'Server error fetching customers list' });
   }
 };
+
+/**
+ * Fetch all Platform Orders
+ */
+export const getOrders = async (req, res) => {
+  try {
+    const query = `
+      SELECT o.id, o.created_at, o.quantity, o.unit_price, o.total_amount, o.commission_pct, o.status,
+             o.buyer_id, o.seller_id, o.product_id, o.group_id,
+             u.name as buyer_name, u.phone as buyer_phone, u.email as buyer_email,
+             sp.business_name as seller_business_name,
+             p.name as product_name, p.sku as product_sku,
+             g.target_size as group_target_size, g.current_size as group_current_size, g.status as group_status
+      FROM orders o
+      JOIN users u ON o.buyer_id = u.id
+      JOIN seller_profiles sp ON o.seller_id = sp.user_id
+      JOIN products p ON o.product_id = p.id
+      LEFT JOIN groups g ON o.group_id = g.id
+      ORDER BY o.created_at DESC
+    `;
+    const result = await pool.query(query);
+    return res.status(200).json({ orders: result.rows });
+  } catch (error) {
+    console.error('Error fetching admin orders:', error.message);
+    return res.status(500).json({ error: 'Server error fetching platform orders' });
+  }
+};

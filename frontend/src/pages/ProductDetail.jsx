@@ -10,10 +10,25 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import OTPLoginModal from '../components/OTPLoginModal';
+import useScrollReveal from '../hooks/useScrollReveal';
+import use3DTilt from '../hooks/use3DTilt';
 
 const AVATAR_COLORS = [
   ['#5b21b6', '#fff'], ['#f05035', '#fff'], ['#f59e0b', '#12100e'],
   ['#059669', '#fff'], ['#4338ca', '#fff'], ['#e11d48', '#fff'],
+];
+
+const PREDEFINED_COLORS = [
+  { name: 'Red', hex: '#ef4444' },
+  { name: 'Blue', hex: '#3b82f6' },
+  { name: 'Green', hex: '#22c55e' },
+  { name: 'Yellow', hex: '#eab308' },
+  { name: 'Black', hex: '#12100e' },
+  { name: 'White', hex: '#ffffff' },
+  { name: 'Gray', hex: '#6b7280' },
+  { name: 'Pink', hex: '#ec4899' },
+  { name: 'Purple', hex: '#a855f7' },
+  { name: 'Orange', hex: '#f97316' },
 ];
 
 export default function ProductDetail() {
@@ -27,9 +42,17 @@ export default function ProductDetail() {
   const [error, setError] = useState(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [selectedColor, setSelectedColor] = useState('');
+  const [selectedSize, setSelectedSize] = useState('');
 
-  useEffect(() => { fetchProductDetails(); }, [id]);
+  const revealRef1 = useScrollReveal();
+  const revealRef2 = useScrollReveal();
+  const tiltRef = use3DTilt({ maxTilt: 8, scale: 1.02 });
 
+  useEffect(() => { 
+    window.scrollTo(0, 0);
+    fetchProductDetails(); 
+  }, [id]);
   const fetchProductDetails = async () => {
     setLoading(true); setError(null);
     try {
@@ -44,9 +67,33 @@ export default function ProductDetail() {
     } finally { setLoading(false); }
   };
 
+  const variants = product?.variants || [];
+  const hasVariants = variants.length > 0 && (variants[0].color !== 'Default' || variants[0].size !== 'Default');
+  
+  const availableColors = hasVariants ? [...new Set(variants.map(v => v.color))].filter(c => c !== 'Default') : [];
+  const availableSizes = hasVariants ? [...new Set(variants.map(v => v.size))].filter(s => s !== 'Default') : [];
+
+  const currentVariant = hasVariants ? variants.find(v => v.color === (selectedColor || (availableColors.length === 0 ? 'Default' : '')) && v.size === (selectedSize || (availableSizes.length === 0 ? 'Default' : ''))) : null;
+  const currentStock = hasVariants ? (currentVariant ? currentVariant.stock : 0) : product?.stock;
+
   const handleCheckout = (targetSize, groupId = null) => {
     if (!isLoggedIn) { setLoginModalOpen(true); return; }
-    navigate('/checkout', { state: { product_id: product.id, group_id: groupId, target_size: targetSize } });
+    if (hasVariants) {
+      if (availableColors.length > 0 && !selectedColor) return toast.error('Please select a color first');
+      if (availableSizes.length > 0 && !selectedSize) return toast.error('Please select a size first');
+    }
+    if (currentStock <= 0) return toast.error('Selected variant is out of stock');
+
+    navigate('/checkout', { 
+      state: { 
+        product_id: product.id, 
+        group_id: groupId, 
+        target_size: targetSize,
+        variant_id: currentVariant?.id,
+        color: selectedColor,
+        size: selectedSize
+      } 
+    });
   };
 
   const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
@@ -72,6 +119,11 @@ export default function ProductDetail() {
   let images = [];
   try { images = typeof product.images === 'string' ? JSON.parse(product.images) : (product.images || []); } catch { images = []; }
   if (images.length === 0) images = ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=70'];
+
+  let videos = [];
+  try { videos = typeof product.videos === 'string' ? JSON.parse(product.videos) : (product.videos || []); } catch { videos = []; }
+
+  const displayImage = (currentVariant && currentVariant.image_url) ? currentVariant.image_url : images[selectedImage];
 
   const soloTier = product.tiers?.find(t => t.group_size === 1);
   const soloPrice = soloTier ? parseFloat(soloTier.price) : 0;
@@ -99,31 +151,39 @@ export default function ProductDetail() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, alignItems: 'start' }}>
 
           {/* LEFT — Images */}
-          <div style={{ position: 'sticky', top: 88 }}>
-            {/* Main image */}
-            <div className="img-zoom-wrap" style={{ aspectRatio: '1/1', background: '#f2ede4', marginBottom: 16, border: '1px solid rgba(18,16,14,0.07)', boxShadow: '0 24px 60px rgba(18,16,14,0.1)' }}>
-              <img
-                src={images[selectedImage]}
-                alt={product.name}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                loading="eager"
-              />
+          <div ref={revealRef1} className="scroll-reveal-group" style={{ flex: '1 1 50%', minWidth: 320 }}>
+            {/* Main Image */}
+            <div ref={tiltRef} className="tilt-card" style={{
+              background: '#f2ede4', borderRadius: 28, overflow: 'hidden', aspectRatio: '4/3', marginBottom: 16,
+              boxShadow: '0 24px 60px rgba(18,16,14,0.06)', position: 'relative'
+            }}>
+              <div className="tilt-card-inner" style={{ width: '100%', height: '100%' }}>
+                <img
+                  src={images[selectedImage]} alt={product.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                <div className="glare" />
+              </div>
             </div>
             {/* Thumbnails */}
-            {images.length > 1 && (
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(images.length, 4)}, 1fr)`, gap: 10 }}>
+            {(images.length > 1 || videos.length > 0) && (
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(images.length + videos.length, 5)}, 1fr)`, gap: 10 }}>
                 {images.map((img, idx) => (
                   <div
-                    key={idx}
+                    key={`img-${idx}`}
                     onClick={() => setSelectedImage(idx)}
                     style={{
                       aspectRatio: '1/1', borderRadius: 14, overflow: 'hidden',
                       border: `2px solid ${selectedImage === idx ? '#5b21b6' : 'rgba(18,16,14,0.08)'}`,
                       cursor: 'pointer', transition: 'all 0.2s',
-                      boxShadow: selectedImage === idx ? '0 0 0 3px rgba(91,33,182,0.15)' : 'none',
                     }}
                   >
                     <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                ))}
+                {videos.map((vid, idx) => (
+                  <div key={`vid-${idx}`} style={{ aspectRatio: '1/1', borderRadius: 14, overflow: 'hidden', border: `2px solid rgba(18,16,14,0.08)` }}>
+                    <video src={vid} style={{ width: '100%', height: '100%', objectFit: 'cover' }} controls muted />
                   </div>
                 ))}
               </div>
@@ -131,16 +191,11 @@ export default function ProductDetail() {
           </div>
 
           {/* RIGHT — Info + Buy Panel */}
-          <div>
-            {/* Category + Title */}
-            <div style={{ marginBottom: 20 }}>
-              <span style={{
-                fontSize: '0.65rem', fontWeight: 800, color: '#5b21b6',
-                textTransform: 'uppercase', letterSpacing: '0.14em',
-                background: 'rgba(91,33,182,0.08)', border: '1px solid rgba(91,33,182,0.15)',
-                padding: '4px 12px', borderRadius: 999, display: 'inline-block', marginBottom: 14,
-              }}>
-                {product.category_name || 'General'}
+          <div ref={revealRef2} className="scroll-reveal-group" style={{ flex: '1 1 40%', minWidth: 320, position: 'sticky', top: 96, maxHeight: 'calc(100vh - 96px)', overflowY: 'auto', paddingRight: 8 }}>
+            
+            <div className="animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+              <span className="badge-pill badge-ink" style={{ marginBottom: 16, display: 'inline-flex', background: 'rgba(91,33,182,0.08)', padding: '4px 12px', borderRadius: 999, color: '#5b21b6', fontSize: '0.65rem', fontWeight: 800 }}>
+                <Tag size={11} /> Special Co-Buy Price
               </span>
               <h1 style={{
                 fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800,
@@ -149,105 +204,75 @@ export default function ProductDetail() {
               }}>
                 {product.name}
               </h1>
-              <p style={{ fontSize: '0.78rem', color: '#a09a94', fontWeight: 500 }}>
-                SKU: {product.sku || 'N/A'} &nbsp;·&nbsp; Stock: {product.stock > 0 ? `${product.stock} units available` : 'Out of Stock'}
+              <p style={{ fontSize: '0.9rem', color: '#6b6560', lineHeight: 1.8, marginBottom: 28, borderLeft: '3px solid rgba(91,33,182,0.2)', paddingLeft: 16 }}>
+                {product.description || 'No description available for this item.'}
               </p>
             </div>
 
-            {/* Description */}
-            <p style={{ fontSize: '0.9rem', color: '#6b6560', lineHeight: 1.8, marginBottom: 28, borderLeft: '3px solid rgba(91,33,182,0.2)', paddingLeft: 16 }}>
-              {product.description || 'No description available for this item.'}
-            </p>
+            {/* Price Tiers (Interactive) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
+              {tiers.map((t, idx) => {
+                const isActive = activeGroups.some(g => g.target_size === t.group_size);
+                const isBest = idx === tiers.length - 1;
 
-            {/* Pre-Auth Banner */}
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(91,33,182,0.06), rgba(67,56,202,0.04))',
-              border: '1px solid rgba(91,33,182,0.15)',
-              borderRadius: 16, padding: '14px 18px',
-              display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 32,
-            }}>
-              <ShieldCheck size={18} color="#5b21b6" style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#12100e', marginBottom: 2 }}>Pre-Authorization Hold Active</div>
-                <div style={{ fontSize: '0.72rem', color: '#6b6560', lineHeight: 1.6 }}>
-                  Your card is only held — not charged. Funds are captured only when the group target is met. If it expires, your hold is automatically released.
-                </div>
-              </div>
-            </div>
-
-            {/* Tier Selection */}
-            <div style={{ marginBottom: 28 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <Tag size={16} color="#5b21b6" />
-                <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1rem', color: '#12100e' }}>
-                  Choose Team Size
-                </span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
-
-                {/* Solo Tier */}
-                <div className="tier-card" onClick={() => handleCheckout(1)} style={{ cursor: product.stock <= 0 ? 'not-allowed' : 'pointer', opacity: product.stock <= 0 ? 0.5 : 1 }}>
-                  <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#a09a94', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Solo Buyer</div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '1.4rem', fontWeight: 800, color: '#12100e', marginBottom: 4 }}>{fmt(soloPrice)}</div>
-                  <div style={{ fontSize: '0.68rem', color: '#a09a94' }}>Standard price · 1 buyer</div>
-                  <div style={{ marginTop: 14, fontSize: '0.72rem', fontWeight: 700, color: '#5b21b6', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    Buy Solo <ArrowRight size={12} />
-                  </div>
-                </div>
-
-                {/* Group Tiers */}
-                {groupTiers.map((tier) => {
-                  const tierPrice = parseFloat(tier.price);
-                  const discount = Math.round(((soloPrice - tierPrice) / soloPrice) * 100);
-                  const isBest = bestTier && tier.group_size === bestTier.group_size;
-                  return (
-                    <div
-                      key={tier.group_size}
-                      className={`tier-card${isBest ? ' best' : ''}`}
-                      onClick={() => handleCheckout(tier.group_size)}
-                      style={{ cursor: product.stock <= 0 ? 'not-allowed' : 'pointer', opacity: product.stock <= 0 ? 0.5 : 1 }}
-                    >
-                      {isBest && (
-                        <div style={{
-                          position: 'absolute', top: 12, right: 12,
-                          background: 'linear-gradient(135deg, #f59e0b, #f05035)',
-                          color: '#fff', fontSize: '0.6rem', fontWeight: 800,
-                          padding: '3px 10px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 4,
-                        }}>
-                          <Flame size={9} fill="#fff" /> BEST DEAL
-                        </div>
-                      )}
-                      <div style={{ fontSize: '0.65rem', fontWeight: 800, color: isBest ? 'rgba(250,248,244,0.5)' : '#a09a94', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-                        {tier.group_size}-Member Team
+                return (
+                  <div key={idx} onClick={() => handleCheckout(t.group_size)} style={{
+                    position: 'relative', overflow: 'hidden',
+                    background: isActive ? 'linear-gradient(135deg, rgba(91,33,182,0.05), transparent)' : '#fff',
+                    border: isActive ? '1.5px solid rgba(91,33,182,0.3)' : '1px solid rgba(18,16,14,0.08)',
+                    borderRadius: 20, padding: '16px 20px',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    boxShadow: isActive ? '0 12px 32px rgba(91,33,182,0.08)' : '0 2px 10px rgba(18,16,14,0.02)',
+                    transition: 'all 0.3s ease', cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateX(4px)';
+                    e.currentTarget.style.borderColor = 'rgba(91,33,182,0.3)';
+                    e.currentTarget.style.boxShadow = '0 12px 32px rgba(91,33,182,0.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.borderColor = isActive ? 'rgba(91,33,182,0.3)' : 'rgba(18,16,14,0.08)';
+                    e.currentTarget.style.boxShadow = isActive ? '0 12px 32px rgba(91,33,182,0.08)' : '0 2px 10px rgba(18,16,14,0.02)';
+                  }}
+                  >
+                    {isActive && <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 4, background: '#5b21b6' }} />}
+                    {isBest && !isActive && <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 4, background: '#f59e0b' }} />}
+                    
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#12100e' }}>
+                          {t.group_size === 1 ? 'Buy Solo' : `Team of ${t.group_size}`}
+                        </span>
+                        {isActive && (
+                          <span style={{ background: '#5b21b6', color: '#fff', fontSize: '0.6rem', fontWeight: 800, padding: '2px 8px', borderRadius: 100, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Zap size={8} fill="#fff" /> Active Now
+                          </span>
+                        )}
+                        {isBest && !isActive && (
+                          <span style={{ background: '#f59e0b', color: '#12100e', fontSize: '0.6rem', fontWeight: 800, padding: '2px 8px', borderRadius: 100, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Flame size={8} fill="#12100e" /> Best Value
+                          </span>
+                        )}
                       </div>
-                      <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '1.4rem', fontWeight: 800, color: isBest ? '#faf8f4' : '#12100e', marginBottom: 4 }}>
-                        {fmt(tierPrice)}
-                      </div>
-                      <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#f05035', background: isBest ? 'rgba(240,80,53,0.2)' : 'rgba(240,80,53,0.08)', borderRadius: 6, padding: '2px 8px', display: 'inline-block', marginBottom: 4 }}>
-                        SAVE {discount}%
-                      </div>
-                      <div style={{ marginTop: 12, fontSize: '0.72rem', fontWeight: 700, color: isBest ? '#f59e0b' : '#5b21b6', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        Start {tier.group_size}-Team <ArrowRight size={12} />
+                      <div style={{ fontSize: '0.75rem', color: '#6b6560' }}>
+                        {t.group_size === 1 ? 'Standard delivery' : 'Co-buy & save'}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Trust Strip */}
-            <div className="trust-strip">
-              {[
-                { icon: <ShieldCheck size={15} color="#059669" />, text: 'Buyer Protected' },
-                { icon: <Zap size={15} color="#5b21b6" />, text: 'Instant Hold Release' },
-                { icon: <RotateCcw size={15} color="#f05035" />, text: '60-Day Returns' },
-                { icon: <Truck size={15} color="#4338ca" />, text: 'Nationwide Delivery' },
-              ].map(({ icon, text }) => (
-                <div key={text} className="trust-item">
-                  {icon} {text}
-                </div>
-              ))}
+                    
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '1.25rem', fontWeight: 800, color: isActive ? '#5b21b6' : '#12100e', lineHeight: 1 }}>
+                        {fmt(t.price)}
+                      </div>
+                      {t.group_size > 1 && (
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#059669', marginTop: 4 }}>
+                          Save {Math.round(((soloPrice - t.price) / soloPrice) * 100)}%
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -262,9 +287,6 @@ export default function ProductDetail() {
               <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.5rem, 3vw, 2rem)', color: '#12100e', display: 'flex', alignItems: 'center', gap: 12 }}>
                 <Users size={24} color="#f59e0b" /> Join an Open Co-Buying Team
               </h2>
-              <p style={{ color: '#6b6560', fontSize: '0.875rem', marginTop: 8, maxWidth: 480 }}>
-                One of these teams only needs a few more members to unlock the group discount.
-              </p>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
@@ -285,28 +307,15 @@ export default function ProductDetail() {
                     boxShadow: '0 2px 12px rgba(18,16,14,0.04)',
                     transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
                     position: 'relative', overflow: 'hidden',
-                  }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(91,33,182,0.25)'; e.currentTarget.style.boxShadow = '0 20px 50px rgba(91,33,182,0.1)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(18,16,14,0.08)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(18,16,14,0.04)'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                  >
-                    {/* Urgency chip */}
-                    {slotsLeft <= 2 && (
-                      <div style={{ position: 'absolute', top: 14, right: 14, background: '#f05035', color: '#fff', fontSize: '0.6rem', fontWeight: 800, padding: '3px 10px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Flame size={9} fill="#fff" /> {slotsLeft} Slot{slotsLeft !== 1 ? 's' : ''} Left!
-                      </div>
-                    )}
-
+                  }}>
                     {/* Creator avatar + name */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-                      <div className="avatar-chip" style={{ background: `linear-gradient(135deg, ${bg}, ${bg}cc)`, color: fg }}>
+                      <div className="avatar-chip" style={{ background: `linear-gradient(135deg, ${bg}, ${bg}cc)`, color: fg, width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
                         {group.creator_name?.charAt(0)?.toUpperCase() || '?'}
                       </div>
                       <div>
                         <div style={{ fontSize: '0.68rem', color: '#a09a94', fontWeight: 600 }}>Team started by</div>
                         <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: '0.9rem', color: '#12100e' }}>{group.creator_name}</div>
-                      </div>
-                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', fontWeight: 700, color: '#b45309', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 999, padding: '4px 10px' }}>
-                        <Clock size={11} /> {hours}h {mins}m
                       </div>
                     </div>
 
@@ -317,12 +326,9 @@ export default function ProductDetail() {
                         <span style={{ color: '#12100e' }}>{group.current_size} / {group.target_size} slots</span>
                       </div>
                       <div style={{ background: '#f2ede4', borderRadius: 99, height: 8, overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', borderRadius: 99,
-                          background: `linear-gradient(90deg, #5b21b6, #4338ca)`,
+                        <div className="progress-bar-animated" style={{
+                          background: 'linear-gradient(90deg, #5b21b6, #f05035)', height: '100%', borderRadius: 999,
                           width: `${progressPct}%`,
-                          transition: 'width 0.5s ease',
-                          boxShadow: '0 2px 6px rgba(91,33,182,0.3)',
                         }} />
                       </div>
                       {slotsLeft > 0 && (
@@ -334,8 +340,9 @@ export default function ProductDetail() {
 
                     <button
                       onClick={() => handleCheckout(group.target_size, group.id)}
+                      disabled={currentStock <= 0}
                       className="btn-violet"
-                      style={{ width: '100%', justifyContent: 'center', borderRadius: 14, padding: '11px 20px', fontSize: '0.82rem' }}
+                      style={{ width: '100%', justifyContent: 'center', borderRadius: 14, padding: '11px 20px', fontSize: '0.82rem', cursor: currentStock <= 0 ? 'not-allowed' : 'pointer', opacity: currentStock <= 0 ? 0.5 : 1 }}
                     >
                       Join This Team <ArrowRight size={14} />
                     </button>
