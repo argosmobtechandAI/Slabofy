@@ -142,24 +142,24 @@ export default function Home() {
           </div>
 
           {/* Two-column layout: copy + floating card */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 48, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
 
-            <div className="animate-fade-in-up" style={{ animationDelay: '120ms', flex: '1 1 420px', maxWidth: 560 }}>
-              <p style={{ fontSize: '1.1rem', color: '#6b6560', lineHeight: 1.75, marginBottom: 36, maxWidth: 440, fontWeight: 400 }}>
+            <div className="animate-fade-in-up" style={{ animationDelay: '120ms', flex: '1 1 320px', maxWidth: 560 }}>
+              <p style={{ fontSize: 'clamp(0.95rem, 2.5vw, 1.15rem)', color: '#6b6560', lineHeight: 1.75, marginBottom: 32, maxWidth: 440, fontWeight: 400 }}>
                 Form group buying teams with friends or global shoppers to unlock wholesale tier discounts. Higher team size = bigger savings.
               </p>
 
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <a href="#products" className="btn-ink" style={{ textDecoration: 'none', padding: '14px 30px', fontSize: '0.92rem' }}>
+                <a href="#products" className="btn-ink" style={{ textDecoration: 'none', padding: '13px 26px', fontSize: '0.88rem' }}>
                   Explore Deals <ArrowRight size={16} />
                 </a>
-                <a href="#products" className="btn-outline-ink" style={{ textDecoration: 'none', padding: '14px 28px', fontSize: '0.92rem' }}>
+                <a href="#products" className="btn-outline-ink" style={{ textDecoration: 'none', padding: '13px 24px', fontSize: '0.88rem' }}>
                   <Users size={16} /> Join a Group
                 </a>
               </div>
 
               {/* Stats row */}
-              <div style={{ display: 'flex', gap: 40, marginTop: 56, paddingTop: 32, borderTop: '1px solid rgba(18,16,14,0.08)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 20, marginTop: 40, paddingTop: 24, borderTop: '1px solid rgba(18,16,14,0.08)' }}>
                 {[
                   { n: '50K+', l: 'Group Buyers', c: '#5b21b6' },
                   { n: '2.5K+', l: 'Live Deals', c: '#f05035' },
@@ -167,40 +167,41 @@ export default function Home() {
                   { n: '100%', l: 'Verified', c: '#b45309' },
                 ].map(({ n, l, c }) => (
                   <div key={l} style={{ animation: 'count-up-pulse 0.8s cubic-bezier(0.22,1,0.36,1) both' }}>
-                    <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '2rem', fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#a09a94', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>{l}</div>
+                    <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '1.6rem', fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#a09a94', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>{l}</div>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Floating deal showcase card */}
-            <div className="animate-float-bob" style={{ flex: '0 0 auto', width: 300 }}>
+            <div className="animate-float-bob w-full max-w-[320px] mx-auto md:mx-0 flex-shrink-0">
               <div style={{
                 background: '#fff',
                 borderRadius: 28,
                 overflow: 'hidden',
                 boxShadow: '0 32px 80px rgba(18,16,14,0.14), 0 8px 24px rgba(91,33,182,0.08)',
                 border: '1px solid rgba(18,16,14,0.08)',
+                width: '100%',
               }}>
                 {/* Card header */}
-                <div style={{ background: 'linear-gradient(135deg, #f7f5fd, #fff)', padding: '20px 22px', borderBottom: '1px solid rgba(18,16,14,0.06)' }}>
-                  <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#a09a94', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Sample Deal Savings</div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '1.3rem', fontWeight: 800, color: '#12100e' }}>Premium Headphones</div>
+                <div style={{ background: 'linear-gradient(135deg, #f7f5fd, #fff)', padding: '18px 20px', borderBottom: '1px solid rgba(18,16,14,0.06)' }}>
+                  <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#a09a94', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Sample Deal Savings</div>
+                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '1.2rem', fontWeight: 800, color: '#12100e' }}>Premium Headphones</div>
                 </div>
                 {/* Tiers */}
-                <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {[
                     { label: 'Solo Buy',        price: '₹1,999', sub: '',          bg: '#f7f5f2',  color: '#a09a94', strike: true  },
                     { label: '3-Member Team',   price: '₹1,499', sub: '25% off',   bg: 'rgba(91,33,182,0.07)',  color: '#5b21b6', strike: false },
                     { label: '10-Member Team',  price: '₹999',   sub: '50% off 🔥', bg: 'linear-gradient(135deg, #5b21b6, #4338ca)', color: '#fff', strike: false },
                   ].map(({ label, price, sub, bg, color, strike }) => (
-                    <div key={label} style={{ background: bg, borderRadius: 14, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div key={label} style={{ background: bg, borderRadius: 14, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: color === '#fff' ? 'rgba(255,255,255,0.7)' : '#a09a94', opacity: 0.9 }}>{label}</div>
-                        {sub && <div style={{ fontSize: '0.65rem', fontWeight: 800, color: color === '#fff' ? '#f59e0b' : '#f05035', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{sub}</div>}
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: color === '#fff' ? 'rgba(255,255,255,0.7)' : '#a09a94', opacity: 0.9 }}>{label}</div>
+                        {sub && <div style={{ fontSize: '0.62rem', fontWeight: 800, color: color === '#fff' ? '#f59e0b' : '#f05035', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{sub}</div>}
                       </div>
-                      <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '1.1rem', fontWeight: 800, color, textDecoration: strike ? 'line-through' : 'none', opacity: strike ? 0.5 : 1 }}>{price}</div>
+                      <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '1rem', fontWeight: 800, color, textDecoration: strike ? 'line-through' : 'none', opacity: strike ? 0.5 : 1 }}>{price}</div>
                     </div>
                   ))}
                 </div>
@@ -208,20 +209,20 @@ export default function Home() {
 
               {/* Small floating badge below card */}
               <div className="animate-float-x" style={{
-                marginTop: 16, marginLeft: 24,
+                marginTop: 14, marginInline: 'auto',
                 background: '#fff',
-                borderRadius: 16, padding: '10px 16px',
+                borderRadius: 16, padding: '8px 14px',
                 boxShadow: '0 8px 24px rgba(18,16,14,0.1)',
                 border: '1px solid rgba(18,16,14,0.07)',
                 display: 'flex', alignItems: 'center', gap: 10,
                 width: 'fit-content',
               }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #059669, #0ea5e9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ShieldCheck size={16} color="#fff" />
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #059669, #0ea5e9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ShieldCheck size={14} color="#fff" />
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#12100e' }}>Buyer Protected</div>
-                  <div style={{ fontSize: '0.65rem', color: '#a09a94', fontWeight: 500 }}>100% money back guarantee</div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#12100e' }}>Buyer Protected</div>
+                  <div style={{ fontSize: '0.62rem', color: '#a09a94', fontWeight: 500 }}>100% money back guarantee</div>
                 </div>
               </div>
             </div>
@@ -230,29 +231,29 @@ export default function Home() {
       </section>
 
       {/* ══ PRODUCTS SECTION ══ */}
-      <section ref={revealRef1} id="products" style={{ maxWidth: 1320, margin: '0 auto', padding: '64px 24px 80px' }}>
+      <section ref={revealRef1} id="products" style={{ maxWidth: 1320, margin: '0 auto', padding: '48px 16px 80px' }}>
 
-        {/* Section label */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 36, flexWrap: 'wrap' }}>
+        {/* Section label & Responsive Search */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
           <div>
-            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 8 }}>— Live Marketplace</span>
-            <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', color: '#12100e', margin: 0 }}>
-              Trending<br />Group Deals
+            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 6 }}>— Live Marketplace</span>
+            <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.6rem, 4vw, 2.6rem)', color: '#12100e', margin: 0 }}>
+              Trending Group Deals
             </h2>
           </div>
 
-          {/* Search */}
-          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8, flex: '0 0 auto' }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={15} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: '#a09a94' }} />
+          {/* Search form with full mobile responsiveness */}
+          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 380 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#a09a94' }} />
               <input
                 type="text" placeholder="Search deals..."
                 value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 className="input-premium"
-                style={{ paddingLeft: 44, paddingTop: 12, paddingBottom: 12, minWidth: 240, fontSize: '0.85rem' }}
+                style={{ paddingLeft: 40, paddingTop: 10, paddingBottom: 10, width: '100%', fontSize: '0.82rem' }}
               />
             </div>
-            <button type="submit" className="btn-violet" style={{ padding: '12px 22px', fontSize: '0.85rem', borderRadius: 14 }}>
+            <button type="submit" className="btn-violet" style={{ padding: '10px 18px', fontSize: '0.82rem', borderRadius: 14, flexShrink: 0 }}>
               Search
             </button>
           </form>
@@ -392,28 +393,28 @@ export default function Home() {
       </section>
 
       {/* ══ HOW IT WORKS ══ */}
-      <section ref={revealRef2} className="mesh-violet" style={{ padding: '80px 24px', borderTop: '1px solid rgba(18,16,14,0.06)' }}>
+      <section ref={revealRef2} className="mesh-violet" style={{ padding: 'clamp(40px, 6vw, 80px) 16px', borderTop: '1px solid rgba(18,16,14,0.06)' }}>
         <div style={{ maxWidth: 1320, margin: '0 auto' }}>
-          <div className="animate-fade-in-up" style={{ textAlign: 'center', marginBottom: 56, animationDelay: '0ms' }}>
+          <div className="animate-fade-in-up" style={{ textAlign: 'center', marginBottom: 40, animationDelay: '0ms' }}>
             <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 12 }}>&mdash; Simple &amp; Powerful</span>
-            <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', color: '#12100e', letterSpacing: '-0.03em' }}>
+            <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.6rem, 4vw, 2.6rem)', color: '#12100e', letterSpacing: '-0.03em' }}>
               How Group Buying Works
             </h2>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20 }}>
             {[
               { n: '01', title: 'Browse Deals', desc: 'Explore products with tiered pricing. The more team members, the lower the price.', color: '#5b21b6' },
               { n: '02', title: 'Start or Join a Team', desc: 'Create a co-buying group or join an existing active team. Share the invite link.', color: '#f05035' },
               { n: '03', title: 'Payment Hold Placed', desc: 'Your card is pre-authorized (not charged yet). Zero risk until the team fills.', color: '#f59e0b' },
               { n: '04', title: 'Group Completes → You Save', desc: 'Once the team fills, payments are captured and orders are dispatched. Everyone wins!', color: '#059669' },
             ].map(({ n, title, desc, color }, idx) => (
-              <div key={n} className="animate-fade-in-up" style={{ background: '#fff', border: '1px solid rgba(18,16,14,0.08)', borderRadius: 24, padding: '28px 24px', transition: 'all 0.3s', boxShadow: '0 4px 20px rgba(18,16,14,0.03)', animationDelay: `${idx * 100}ms` }}
+              <div key={n} className="animate-fade-in-up" style={{ background: '#fff', border: '1px solid rgba(18,16,14,0.08)', borderRadius: 24, padding: '24px 20px', transition: 'all 0.3s', boxShadow: '0 4px 20px rgba(18,16,14,0.03)', animationDelay: `${idx * 100}ms` }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = color + '44'; e.currentTarget.style.background = color + '10'; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(18,16,14,0.08)'; e.currentTarget.style.background = '#fff'; }}
               >
-                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '2.5rem', color, lineHeight: 1, marginBottom: 16, opacity: 0.7 }}>{n}</div>
-                <h3 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: '1.05rem', color: '#12100e', marginBottom: 10, letterSpacing: '-0.02em' }}>{title}</h3>
-                <p style={{ fontSize: '0.82rem', color: '#6b6560', lineHeight: 1.75 }}>{desc}</p>
+                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '2.2rem', color, lineHeight: 1, marginBottom: 14, opacity: 0.7 }}>{n}</div>
+                <h3 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700, fontSize: '1rem', color: '#12100e', marginBottom: 8, letterSpacing: '-0.02em' }}>{title}</h3>
+                <p style={{ fontSize: '0.8rem', color: '#6b6560', lineHeight: 1.7 }}>{desc}</p>
               </div>
             ))}
           </div>
@@ -421,11 +422,11 @@ export default function Home() {
       </section>
 
       {/* ══ WHY GROUP BUYING ══ */}
-      <section ref={revealRef4} style={{ padding: '80px 24px', background: '#fff', borderTop: '1px solid rgba(18,16,14,0.06)' }}>
+      <section ref={revealRef4} style={{ padding: 'clamp(40px, 6vw, 80px) 16px', background: '#fff', borderTop: '1px solid rgba(18,16,14,0.06)' }}>
         <div style={{ maxWidth: 1320, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 56 }}>
+          <div style={{ textAlign: 'center', marginBottom: 40 }}>
             <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#f05035', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 12 }}>— Why Us?</span>
-            <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', color: '#12100e', letterSpacing: '-0.03em' }}>
+            <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.6rem, 4vw, 2.6rem)', color: '#12100e', letterSpacing: '-0.03em' }}>
               Why Group Buying?<br />
               <span style={{ background: 'linear-gradient(135deg, #5b21b6, #f05035)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>The Smarter Way to Shop</span>
             </h2>

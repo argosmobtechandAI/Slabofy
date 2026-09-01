@@ -5,8 +5,12 @@ import { Toaster } from 'react-hot-toast';
 import '../index.css';
 
 export const metadata = {
-  title: 'Slabofy | Premium Co-Buying E-Commerce Platform',
+  title: 'Slabofy — Buy Together. Save Together.',
   description: 'Join co-buying teams to access tier-based wholesale discounts, pre-authorization security, and real-time social shopping.',
+  icons: {
+    icon: '/favicon.png',
+    apple: '/slabofy-icon.png',
+  },
 };
 
 export default function RootLayout({ children }) {

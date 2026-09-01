@@ -26,10 +26,48 @@ export default function Checkout() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // Shiprocket Real-time Serviceability State
+  const [serviceability, setServiceability] = useState(null);
+  const [checkingServiceability, setCheckingServiceability] = useState(false);
+
   // Promo Coupon Code States
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponLoading, setCouponLoading] = useState(false);
+
+  // Real-time Shiprocket Serviceability Checker on Pincode Entry
+  useEffect(() => {
+    const cleanZip = zip.trim();
+    if (cleanZip.length === 6 && !isNaN(cleanZip)) {
+      checkPincodeServiceability(cleanZip);
+    } else {
+      setServiceability(null);
+    }
+  }, [zip]);
+
+  const checkPincodeServiceability = async (pincode) => {
+    setCheckingServiceability(true);
+    try {
+      const res = await api.get('/shiprocket/serviceability', {
+        params: {
+          delivery_postcode: pincode,
+          weight: product?.weight_kg || 0.50,
+          cod: 1
+        }
+      });
+      setServiceability(res.data);
+
+      // If COD not supported for this pincode, automatically switch to prepaid
+      if (res.data.cod_available === false && paymentMethod === 'cod') {
+        setPaymentMethod('online');
+        toast('Cash on Delivery is not available for this pincode. Switched to Online Payment.', { icon: 'ℹ️' });
+      }
+    } catch (err) {
+      console.warn('Serviceability check note:', err.message);
+    } finally {
+      setCheckingServiceability(false);
+    }
+  };
 
   const handleApplyCoupon = async (e) => {
     e.preventDefault();
@@ -110,7 +148,7 @@ export default function Checkout() {
     if (paymentMethod === 'cod') {
       await handleCodCheckout(fullAddress, zip.trim());
     } else {
-      await handleOnlineCheckout(fullAddress);
+      await handleOnlineCheckout(fullAddress, zip.trim());
     }
   };
 
@@ -127,6 +165,7 @@ export default function Checkout() {
         color,
         size,
         shipping_address: fullAddress,
+        delivery_pincode: zipCode,
         pincode: zipCode,
         coupon_code: appliedCoupon ? appliedCoupon.code : undefined
       };
@@ -147,7 +186,7 @@ export default function Checkout() {
   /**
    * Online Payment Checkout (Pre-Auth hold mode)
    */
-  const handleOnlineCheckout = async (fullAddress) => {
+  const handleOnlineCheckout = async (fullAddress, zipCode) => {
     try {
       const payload = {
         product_id,
@@ -157,6 +196,7 @@ export default function Checkout() {
         color,
         size,
         shipping_address: fullAddress,
+        delivery_pincode: zipCode,
         coupon_code: appliedCoupon ? appliedCoupon.code : undefined
       };
 
@@ -194,6 +234,7 @@ export default function Checkout() {
         currency: 'INR',
         name: 'Slabofy',
         description: `Hold pre-authorization for ${target_size}-member co-buy`,
+        image: window.location.origin + '/slabofy-icon.png',
         order_id: razorpay_order_id,
         
         handler: async function (response) {
@@ -279,28 +320,28 @@ export default function Checkout() {
 
   return (
     <div className="mesh-violet" style={{ minHeight: '100vh' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '24px 24px 80px' }}>
+      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '16px 16px 80px' }}>
 
         {/* Back nav */}
-        <Link to={`/product/${product_id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#a09a94', textDecoration: 'none', fontSize: '0.78rem', fontWeight: 600, marginBottom: 28, transition: 'color 0.2s' }}
+        <Link to={`/product/${product_id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#a09a94', textDecoration: 'none', fontSize: '0.78rem', fontWeight: 600, marginBottom: 20, transition: 'color 0.2s' }}
           onMouseEnter={e => e.currentTarget.style.color = '#5b21b6'}
           onMouseLeave={e => e.currentTarget.style.color = '#a09a94'}
         >
           <ChevronLeft size={16} /> Back to Product
         </Link>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: 32, alignItems: 'start' }}>
+        <div className="grid-responsive-checkout">
 
           {/* ── LEFT — Delivery + Payment ── */}
-          <div style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(18,16,14,0.08)', padding: '32px 32px', boxShadow: '0 4px 24px rgba(18,16,14,0.06)' }}>
+          <div style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(18,16,14,0.08)', padding: '24px 20px', boxShadow: '0 4px 24px rgba(18,16,14,0.06)' }}>
 
-            <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.25rem', color: '#12100e', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #5b21b6, #4338ca)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: '0.9rem', flexShrink: 0 }}>1</div>
+            <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.15rem', color: '#12100e', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(135deg, #5b21b6, #4338ca)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: '0.85rem', flexShrink: 0 }}>1</div>
               Delivery Information
             </h2>
 
             <form onSubmit={handlePlaceOrder}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
                 {/* Address Line 1 */}
                 <div>
@@ -332,7 +373,7 @@ export default function Checkout() {
                 </div>
 
                 {/* City / State / ZIP */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 12 }}>
                   {[
                     { label: 'City', placeholder: 'e.g. Mumbai', value: city, onChange: e => setCity(e.target.value), required: true },
                     { label: 'State', placeholder: 'e.g. Maharashtra', value: state, onChange: e => setState(e.target.value), required: true },
@@ -351,6 +392,51 @@ export default function Checkout() {
                   ))}
                 </div>
 
+                {/* Real-time Shiprocket Delivery & COD Verification Badge */}
+                {checkingServiceability && (
+                  <div style={{ background: '#f8f7ff', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 14, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.75rem', color: '#4338ca' }}>
+                    <RefreshCw size={14} style={{ animation: 'spin-slow 0.8s linear infinite' }} />
+                    <span>Checking Shiprocket courier coverage & COD availability...</span>
+                  </div>
+                )}
+
+                {serviceability && (
+                  <div style={{
+                    background: serviceability.serviceable ? 'rgba(5,150,105,0.05)' : 'rgba(239,68,68,0.05)',
+                    border: `1px solid ${serviceability.serviceable ? 'rgba(5,150,105,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                    borderRadius: 14,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Truck size={15} color={serviceability.serviceable ? '#059669' : '#ef4444'} />
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#12100e' }}>
+                          {serviceability.serviceable ? 'Shiprocket Courier Serviceable' : 'Pincode Not Serviceable'}
+                        </span>
+                      </div>
+                      {serviceability.estimated_delivery_days && (
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#059669', background: 'rgba(5,150,105,0.1)', padding: '2px 8px', borderRadius: 20 }}>
+                          Est. {serviceability.estimated_delivery_days}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 16, fontSize: '0.72rem', color: '#6b6560', paddingLeft: 23 }}>
+                      <span>
+                        🚚 Couriers: <strong style={{ color: '#12100e' }}>{serviceability.couriers_count || 1}+ Partners</strong>
+                      </span>
+                      <span>
+                        💵 Cash on Delivery: <strong style={{ color: serviceability.cod_available ? '#059669' : '#dc2626' }}>
+                          {serviceability.cod_available ? 'Available' : 'Prepaid Only'}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Payment Method */}
                 <div style={{ paddingTop: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -359,16 +445,24 @@ export default function Checkout() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                     {[
-                      { value: 'online', title: 'Pre-Auth Card / UPI', desc: 'Card held, captured only when team fills.', accent: '#5b21b6' },
-                      { value: 'cod', title: 'Cash on Delivery', desc: 'Pay in cash when your order arrives.', accent: '#f59e0b' },
-                    ].map(({ value, title, desc, accent }) => (
+                      { value: 'online', title: 'Pre-Auth Card / UPI', desc: 'Card held, captured only when team fills.', accent: '#5b21b6', disabled: false },
+                      { 
+                        value: 'cod', 
+                        title: 'Cash on Delivery', 
+                        desc: serviceability && !serviceability.cod_available ? 'Not available for this pincode.' : 'Pay in cash when your order arrives.', 
+                        accent: '#f59e0b',
+                        disabled: serviceability && !serviceability.cod_available
+                      },
+                    ].map(({ value, title, desc, accent, disabled }) => (
                       <label
                         key={value}
-                        onClick={() => setPaymentMethod(value)}
+                        onClick={() => !disabled && setPaymentMethod(value)}
                         style={{
                           border: `2px solid ${paymentMethod === value ? accent : 'rgba(18,16,14,0.1)'}`,
                           borderRadius: 16, padding: '16px 18px',
-                          display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer',
+                          display: 'flex', alignItems: 'flex-start', gap: 12, 
+                          cursor: disabled ? 'not-allowed' : 'pointer',
+                          opacity: disabled ? 0.5 : 1,
                           background: paymentMethod === value ? `${accent}08` : '#faf8f4',
                           transition: 'all 0.2s',
                           boxShadow: paymentMethod === value ? `0 0 0 3px ${accent}18` : 'none',
@@ -392,14 +486,14 @@ export default function Checkout() {
                   </div>
                 </div>
 
-                {/* COD Pincode Notice */}
+                {/* COD Notice */}
                 {paymentMethod === 'cod' && (
                   <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 14, padding: '14px 16px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     <Truck size={16} color="#b45309" style={{ flexShrink: 0, marginTop: 1 }} />
                     <div>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#12100e', marginBottom: 4 }}>COD Pincode Check</div>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#12100e', marginBottom: 4 }}>Shiprocket Verified COD</div>
                       <p style={{ fontSize: '0.72rem', color: '#6b6560', lineHeight: 1.6 }}>
-                        COD is auto-verified via your ZIP. Test pincodes: <span style={{ color: '#5b21b6', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}>110001, 400001, 560001, 600001, 700001, 500001</span>.
+                        Pay cash directly to the courier partner upon parcel delivery at your doorstep.
                       </p>
                     </div>
                   </div>

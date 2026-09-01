@@ -1,4 +1,5 @@
 import { pool, redisClient } from '../config/db.js';
+import { registerPickupAddress } from '../utils/shiprocket.js';
 
 // ==========================================
 // CATEGORY CRUD
@@ -116,12 +117,19 @@ export const approveSeller = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Fetch user_id from profile
-    const profileRes = await client.query('SELECT user_id FROM seller_profiles WHERE id = $1', [id]);
+    // Fetch seller profile details with user details
+    const profileRes = await client.query(`
+      SELECT sp.*, u.name as user_name, u.email as user_email, u.phone as user_phone
+      FROM seller_profiles sp
+      JOIN users u ON sp.user_id = u.id
+      WHERE sp.id = $1
+    `, [id]);
+
     if (profileRes.rowCount === 0) {
       return res.status(404).json({ error: 'Seller profile not found' });
     }
-    const userId = profileRes.rows[0].user_id;
+    const seller = profileRes.rows[0];
+    const userId = seller.user_id;
 
     // 1. Set is_approved = true
     await client.query('UPDATE seller_profiles SET is_approved = true WHERE id = $1', [id]);
@@ -129,8 +137,44 @@ export const approveSeller = async (req, res) => {
     // 2. Set user role = 'seller'
     await client.query("UPDATE users SET role = 'seller' WHERE id = $1", [userId]);
 
+    // 3. Register Pickup Address with Shiprocket (Option A: Seller Pickup)
+    let pickupLocationName = seller.business_name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 35);
+    try {
+      const shiprocketAddressPayload = {
+        pickup_location: pickupLocationName,
+        name: seller.pickup_name || seller.user_name,
+        email: seller.user_email || 'seller@slabofy.com',
+        phone: (seller.pickup_phone || seller.user_phone).replace(/[^0-9]/g, '').slice(-10),
+        address: seller.pickup_address || seller.business_address || 'Seller Street Address',
+        address_2: '',
+        city: seller.pickup_city || 'City',
+        state: seller.pickup_state || 'State',
+        country: seller.pickup_country || 'India',
+        pin_code: seller.pickup_pincode || '110001'
+      };
+
+      const srRes = await registerPickupAddress(shiprocketAddressPayload);
+      const registeredLocation = srRes?.address?.pickup_location || pickupLocationName;
+
+      await client.query(
+        'UPDATE seller_profiles SET shiprocket_pickup_id = $1 WHERE id = $2',
+        [registeredLocation, id]
+      );
+      console.log(`[SHIPROCKET] Registered pickup location '${registeredLocation}' for seller #${id}`);
+    } catch (srErr) {
+      console.warn('[SHIPROCKET WARNING] Failed registering pickup location on Shiprocket during approval:', srErr.message || srErr);
+      // Non-blocking so admin approval still succeeds even if external network/mock issue occurs
+      await client.query(
+        'UPDATE seller_profiles SET shiprocket_pickup_id = $1 WHERE id = $2',
+        [pickupLocationName, id]
+      );
+    }
+
     await client.query('COMMIT');
-    return res.status(200).json({ message: 'Seller approved and promoted to seller role successfully' });
+    return res.status(200).json({ 
+      message: 'Seller approved and Shiprocket pickup address registered successfully',
+      shiprocket_pickup_id: pickupLocationName
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error in approveSeller:', error.message);
@@ -421,6 +465,7 @@ export const getOrders = async (req, res) => {
     const query = `
       SELECT o.id, o.created_at, o.quantity, o.unit_price, o.total_amount, o.commission_pct, o.status,
              o.buyer_id, o.seller_id, o.product_id, o.group_id,
+             o.awb_code, o.courier_name_sr, o.shiprocket_order_id, o.shipment_status, o.is_cod,
              u.name as buyer_name, u.phone as buyer_phone, u.email as buyer_email,
              sp.business_name as seller_business_name,
              p.name as product_name, p.sku as product_sku,

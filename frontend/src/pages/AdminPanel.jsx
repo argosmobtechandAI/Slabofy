@@ -272,12 +272,9 @@ export default function AdminPanel() {
         <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl hover:bg-[rgba(91,33,182,0.06)] transition-colors">
           <Menu size={20} className="text-[#5b21b6]" />
         </button>
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center">
-            <span className="text-white font-bold text-sm">S</span>
-          </div>
-          <span className="font-display font-bold text-base text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span></span>
-        </div>
+        <Link to="/" className="flex items-center">
+          <img src="/slabofy-logo.png" alt="Slabofy" style={{ height: 32, width: 'auto', objectFit: 'contain' }} />
+        </Link>
       </div>
 
       {/* Mobile Drawer Overlay */}
@@ -286,7 +283,9 @@ export default function AdminPanel() {
           <div className="drawer-overlay lg:hidden" onClick={() => setSidebarOpen(false)} />
           <div className="drawer-panel sidebar-light lg:hidden flex flex-col">
             <div className="h-14 flex items-center px-5 border-b border-[rgba(91,33,182,0.08)]">
-              <span className="font-display font-bold text-base text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span> Admin</span>
+              <Link to="/" onClick={() => setSidebarOpen(false)}>
+                <img src="/slabofy-logo.png" alt="Slabofy" style={{ height: 34, width: 'auto', objectFit: 'contain' }} />
+              </Link>
             </div>
             <div className="flex-1 p-3 space-y-0.5 overflow-y-auto">
               <div className="text-[9px] font-black uppercase text-[#c4c0d8] tracking-[0.15em] px-3 py-3">System</div>
@@ -326,14 +325,8 @@ export default function AdminPanel() {
 
           {/* Logo */}
           <div className="h-16 flex items-center px-5 border-b border-[rgba(91,33,182,0.08)] relative z-10">
-            <Link to="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center shadow-lg shadow-violet-500/20">
-                <span className="text-white font-bold text-base">S</span>
-              </div>
-              <div>
-                <div className="font-display font-black text-sm text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span></div>
-                <div className="text-[8px] font-bold uppercase text-[#9490b8] tracking-widest">Admin Portal</div>
-              </div>
+            <Link to="/" className="flex items-center">
+              <img src="/slabofy-logo.png" alt="Slabofy — Buy Together. Save Together." style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
             </Link>
           </div>
 
@@ -575,7 +568,22 @@ export default function AdminPanel() {
                             <span>GSTIN: {sel.gstin || 'N/A'}</span>
                             <span>PAN: {sel.pan_number || 'N/A'}</span>
                             <span>AADHAR: {sel.aadhar_number || 'N/A'}</span>
-                            <span className="w-full">Address: {sel.business_address || 'N/A'}</span>
+                            <span className="w-full text-[#6b6560]">Legal Address: {sel.business_address || 'N/A'}</span>
+                            
+                            {/* Shiprocket Pickup Address */}
+                            <div className="w-full bg-[#faf8f4] border border-[rgba(99,102,241,0.15)] rounded-xl p-2.5 my-1 text-[#1e1b4b]">
+                              <span className="font-bold text-[#4338ca] block">📦 Shiprocket Pickup Location:</span>
+                              <span>Contact: {sel.pickup_name || sel.name} ({sel.pickup_phone || sel.phone})</span> &nbsp;|&nbsp;
+                              <span>PIN: {sel.pickup_pincode || 'N/A'}</span> &nbsp;|&nbsp;
+                              <span>City/State: {sel.pickup_city || 'N/A'}, {sel.pickup_state || 'N/A'}</span>
+                              <div className="text-[9px] text-[#6b6560] mt-0.5">Address: {sel.pickup_address || sel.business_address || 'N/A'}</div>
+                              {sel.shiprocket_pickup_id && (
+                                <div className="text-[9px] text-green-700 font-bold mt-1">
+                                  ✓ Shiprocket Location ID: <span className="font-mono">{sel.shiprocket_pickup_id}</span>
+                                </div>
+                              )}
+                            </div>
+
                             <span>Bank A/C: {sel.bank_account || 'N/A'}</span>
                             <span>IFSC: {sel.ifsc || 'N/A'}</span>
                             
@@ -596,10 +604,10 @@ export default function AdminPanel() {
                           {!sel.is_approved ? (
                             <button
                               onClick={() => handleApproveSeller(sel.id)}
-                              className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                              className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
                             >
-                              <Check size={14} />
-                              Approve merchant
+                              <CheckCircle2 size={14} />
+                              Approve & Register Shiprocket
                             </button>
                           ) : (
                             <button
@@ -900,12 +908,13 @@ export default function AdminPanel() {
                         <th className="py-4 px-5">Buy Type</th>
                         <th className="py-4 px-5">Financials</th>
                         <th className="py-4 px-5">Status</th>
+                        <th className="py-4 px-5">Shipment / AWB</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
                       {orders.length === 0 ? (
                         <tr>
-                          <td colSpan="7" className="py-8 text-center text-gray-400">No platform orders found.</td>
+                          <td colSpan="8" className="py-8 text-center text-gray-400">No platform orders found.</td>
                         </tr>
                       ) : (
                         orders.map((o) => (
@@ -959,6 +968,35 @@ export default function AdminPanel() {
                               }`}>
                                 {o.status}
                               </span>
+                            </td>
+                            {/* Shipment / AWB Column */}
+                            <td className="py-4 px-5">
+                              {o.awb_code || o.shiprocket_order_id ? (
+                                <div>
+                                  {o.awb_code && (
+                                    <span className="block font-mono text-[10px] font-bold text-[#5b21b6]" title="AWB Code">
+                                      AWB: {o.awb_code}
+                                    </span>
+                                  )}
+                                  {o.courier_name_sr && (
+                                    <span className="block text-[10px] text-[#6b6560] mt-0.5">{o.courier_name_sr}</span>
+                                  )}
+                                  {o.shipment_status && (
+                                    <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                      o.shipment_status === 'delivered' ? 'bg-green-100 text-green-700' :
+                                      o.shipment_status === 'in_transit' ? 'bg-blue-100 text-blue-700' :
+                                      o.shipment_status === 'pickup_scheduled' ? 'bg-purple-100 text-purple-700' :
+                                      o.shipment_status === 'courier_pending' ? 'bg-amber-100 text-amber-700' :
+                                      o.shipment_status === 'cancelled' || o.shipment_status === 'rto' ? 'bg-red-100 text-red-700' :
+                                      'bg-gray-100 text-gray-500'
+                                    }`}>
+                                      {o.shipment_status.replace(/_/g, ' ')}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-gray-400 italic">Not dispatched</span>
+                              )}
                             </td>
                           </tr>
                         ))

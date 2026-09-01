@@ -478,12 +478,22 @@ export const resetPassword = async (req, res) => {
 export const sellerSignup = async (req, res) => {
   const { 
     name, email, phone, password, 
-    business_name, business_type, gstin, pan_number, aadhar_number, business_address, bank_account, ifsc, kyc_document_url
+    business_name, business_type, gstin, pan_number, aadhar_number, business_address, bank_account, ifsc, kyc_document_url,
+    pickup_name, pickup_phone, pickup_address, pickup_city, pickup_state, pickup_pincode, pickup_country
   } = req.body;
 
   if (!name || !email || !phone || !password || !business_name || !pan_number || !aadhar_number) {
     return res.status(400).json({ error: 'Required fields missing for seller signup' });
   }
+
+  // Fallback pickup values to user/business values if not explicitly separated
+  const finalPickupName = pickup_name || name;
+  const finalPickupPhone = (pickup_phone || phone).replace(/[^0-9]/g, '').slice(-10);
+  const finalPickupAddress = pickup_address || business_address;
+  const finalPickupCity = pickup_city || 'City';
+  const finalPickupState = pickup_state || 'State';
+  const finalPickupPincode = pickup_pincode || '110001';
+  const finalPickupCountry = pickup_country || 'India';
 
   // Format validation for Indian phone numbers (+91 prefix)
   const phoneRegex = /^\+91[6-9]\d{9}$/;
@@ -531,14 +541,16 @@ export const sellerSignup = async (req, res) => {
     ]);
     const user = userResult.rows[0];
 
-    // Insert seller profile
+    // Insert seller profile with pickup address
     const insertSellerQuery = `
       INSERT INTO seller_profiles 
-      (user_id, business_name, business_type, business_address, gstin, pan_number, aadhar_number, kyc_document_url, bank_account, ifsc, is_approved)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
+      (user_id, business_name, business_type, business_address, gstin, pan_number, aadhar_number, kyc_document_url, bank_account, ifsc, 
+       pickup_name, pickup_phone, pickup_address, pickup_city, pickup_state, pickup_pincode, pickup_country, is_approved)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, false)
     `;
     await client.query(insertSellerQuery, [
-      user.id, business_name, business_type, business_address, gstin, pan_number, aadhar_number, kyc_document_url, bank_account, ifsc
+      user.id, business_name, business_type, business_address, gstin, pan_number, aadhar_number, kyc_document_url, bank_account, ifsc,
+      finalPickupName, finalPickupPhone, finalPickupAddress, finalPickupCity, finalPickupState, finalPickupPincode, finalPickupCountry
     ]);
 
     await client.query('COMMIT');

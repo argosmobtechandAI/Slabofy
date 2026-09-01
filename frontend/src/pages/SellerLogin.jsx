@@ -17,7 +17,7 @@ export default function SellerLogin() {
 
   // Signup Multi-step State
   const [step, setStep] = useState(1);
-  const totalSteps = 4;
+  const totalSteps = 5;
 
   const [signupData, setSignupData] = useState({
     // Step 1: Account
@@ -26,7 +26,9 @@ export default function SellerLogin() {
     business_name: '', business_type: 'Proprietorship', gstin: '',
     // Step 3: KYC
     pan_number: '', aadhar_number: '', business_address: '',
-    // Step 4: Banking
+    // Step 4: Shiprocket Pickup Address
+    pickup_name: '', pickup_phone: '', pickup_address: '', pickup_city: '', pickup_state: 'Delhi', pickup_pincode: '', pickup_country: 'India',
+    // Step 5: Banking
     bank_account: '', ifsc: ''
   });
   const [documentFile, setDocumentFile] = useState(null);
@@ -43,7 +45,6 @@ export default function SellerLogin() {
     try {
       const user = await loginWithEmail(loginEmail, loginPassword);
       if (user.role !== 'seller') {
-        // Technically they might be an unapproved seller ('user'), but we let the SellerPanel handle that state or they get bounced.
         toast.error('Logging in...');
         navigate('/seller');
       }
@@ -98,6 +99,16 @@ export default function SellerLogin() {
       }
     }
     if (step === 4) {
+      if (!signupData.pickup_name || !signupData.pickup_phone || !signupData.pickup_address || !signupData.pickup_city || !signupData.pickup_state || !signupData.pickup_pincode) {
+        toast.error('Please fill all pickup address fields for courier dispatch');
+        return false;
+      }
+      if (signupData.pickup_pincode.trim().length !== 6) {
+        toast.error('Pickup pincode must be exactly 6 digits');
+        return false;
+      }
+    }
+    if (step === 5) {
       if (!signupData.bank_account || !signupData.ifsc) {
         toast.error('Bank Account and IFSC are required');
         return false;
@@ -208,6 +219,14 @@ export default function SellerLogin() {
     </form>
   );
 
+  const INDIAN_STATES = [
+    'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 
+    'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 
+    'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 
+    'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 
+    'West Bengal', 'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Chandigarh'
+  ];
+
   const renderSignupStep = () => {
     switch (step) {
       case 1:
@@ -241,7 +260,7 @@ export default function SellerLogin() {
             <h3 className="font-bold text-[#1e1b4b] mb-4 flex items-center gap-2"><ShieldCheck size={18}/> KYC Verification</h3>
             <input type="text" name="pan_number" placeholder="Business / Individual PAN Number" value={signupData.pan_number} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none uppercase" maxLength={10} required />
             <input type="text" name="aadhar_number" placeholder="Aadhar Number" value={signupData.aadhar_number} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none" maxLength={12} required />
-            <textarea name="business_address" placeholder="Complete Business Address" rows={2} value={signupData.business_address} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none" required />
+            <textarea name="business_address" placeholder="Registered Legal Address" rows={2} value={signupData.business_address} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none" required />
             
             <div className="mt-4">
               <label className="text-xs font-bold text-[#9490b8] block mb-2">Upload KYC Document (PDF/JPG/PNG)</label>
@@ -259,6 +278,28 @@ export default function SellerLogin() {
       case 4:
         return (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+            <div>
+              <h3 className="font-bold text-[#1e1b4b] flex items-center gap-2"><MapPin size={18} className="text-[#4338ca]"/> Courier Pickup Address</h3>
+              <p className="text-[11px] text-[#9490b8] mt-1">Shiprocket couriers will collect orders directly from this location.</p>
+            </div>
+            
+            <input type="text" name="pickup_name" placeholder="Pickup Contact Person Name" value={signupData.pickup_name} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none" required />
+            <input type="tel" name="pickup_phone" placeholder="Pickup Contact Phone (10 Digits)" value={signupData.pickup_phone} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none" maxLength={10} required />
+            <textarea name="pickup_address" placeholder="Complete Warehouse / Store Street Address" rows={2} value={signupData.pickup_address} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none" required />
+            
+            <div className="grid grid-cols-2 gap-3">
+              <input type="text" name="pickup_city" placeholder="City" value={signupData.pickup_city} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none" required />
+              <input type="text" name="pickup_pincode" placeholder="6-digit Pincode" value={signupData.pickup_pincode} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none" maxLength={6} required />
+            </div>
+
+            <select name="pickup_state" value={signupData.pickup_state} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none text-[#1e1b4b]">
+              {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        );
+      case 5:
+        return (
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
             <h3 className="font-bold text-[#1e1b4b] mb-4 flex items-center gap-2"><Landmark size={18}/> Banking Details</h3>
             <input type="text" name="bank_account" placeholder="Bank Account Number" value={signupData.bank_account} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none" required />
             <input type="text" name="ifsc" placeholder="IFSC Code" value={signupData.ifsc} onChange={handleSignupChange} className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl py-3 px-4 text-sm focus:border-[#6366f1] outline-none uppercase" required />
@@ -266,7 +307,7 @@ export default function SellerLogin() {
             <div className="bg-[#faf8f4] border border-[#e5e7eb] rounded-xl p-4 mt-6">
               <h4 className="text-xs font-bold text-[#1e1b4b] flex items-center gap-1.5 mb-2"><CheckCircle2 size={14} className="text-green-500"/> Verification Notice</h4>
               <p className="text-[10px] text-[#6b6560] leading-relaxed">
-                By submitting this application, you agree to our Merchant Terms of Service. Your KYC documents and banking details will be manually reviewed by our compliance team. Approval typically takes 24-48 business hours.
+                By submitting this application, you agree to our Merchant Terms of Service. Your KYC documents, Shiprocket pickup address, and banking details will be reviewed for automatic courier onboarding.
               </p>
             </div>
           </div>
@@ -316,8 +357,17 @@ export default function SellerLogin() {
   );
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#faf8f4] p-4 font-sans">
-      <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-[0_8px_32px_rgba(18,16,14,0.06)] border border-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-[#faf8f4] px-4 py-8 font-sans">
+      <div className="w-full max-w-md bg-white rounded-3xl p-5 sm:p-8 shadow-[0_8px_32px_rgba(18,16,14,0.06)] border border-gray-100">
+        <div className="flex justify-center mb-6">
+          <Link to="/">
+            <img
+              src="/slabofy-logo.png"
+              alt="Slabofy — Buy Together. Save Together."
+              style={{ height: 42, width: 'auto', objectFit: 'contain' }}
+            />
+          </Link>
+        </div>
         {isLogin ? renderLogin() : renderSignup()}
         
         {isLogin && (

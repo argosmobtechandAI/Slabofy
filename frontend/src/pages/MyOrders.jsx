@@ -72,8 +72,13 @@ export default function MyOrders() {
   const { isLoggedIn, user, updateProfile } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(!isLoggedIn);
   const [activeTab, setActiveTab] = useState('orders');
+
+  // Live Tracking Modal State
+  const [trackingModalOrder, setTrackingModalOrder] = useState(null);
+  const [trackingData, setTrackingData] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
 
   // Security Form State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -96,8 +101,13 @@ export default function MyOrders() {
   }, [user]);
 
   useEffect(() => {
-    if (isLoggedIn) fetchOrders();
-    else setLoading(false);
+    if (isLoggedIn) {
+      setLoginModalOpen(false);
+      fetchOrders();
+    } else {
+      setLoading(false);
+      setLoginModalOpen(true);
+    }
   }, [isLoggedIn]);
 
   const fetchOrders = async () => {
@@ -107,6 +117,20 @@ export default function MyOrders() {
       setOrders(res.data.orders || []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
+  };
+
+  const handleOpenTrackingModal = async (order) => {
+    setTrackingModalOrder(order);
+    setTrackingLoading(true);
+    setTrackingData(null);
+    try {
+      const res = await api.get(`/shiprocket/orders/${order.id}/tracking`);
+      setTrackingData(res.data);
+    } catch (err) {
+      toast.error('Unable to fetch live tracking at the moment');
+    } finally {
+      setTrackingLoading(false);
+    }
   };
 
   const handleUpdateProfile = async (e) => {
@@ -326,16 +350,45 @@ export default function MyOrders() {
                         </Link>
                       )}
 
-                      {/* Tracking info */}
-                      {order.status === 'shipped' && order.courier_name && (
-                        <div style={{ background: 'rgba(67,56,202,0.05)', border: '1px solid rgba(67,56,202,0.15)', borderRadius: 12, padding: '10px 14px' }}>
-                          <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f05035', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                            {fmt(order.total_amount)}
-                          </span>
-                          <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#12100e' }}>{order.courier_name}</div>
-                          <div style={{ fontSize: '0.72rem', fontFamily: 'Inter, monospace', fontWeight: 700, color: '#5b21b6', marginTop: 2, userSelect: 'all' }}>
-                            {order.tracking_number}
+                      {/* Shiprocket Tracking info */}
+                      {(order.status === 'shipped' || order.status === 'delivered') && (
+                        <div style={{ background: 'rgba(67,56,202,0.04)', border: '1px solid rgba(67,56,202,0.15)', borderRadius: 14, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <Truck size={14} color="#4338ca" />
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#12100e' }}>
+                                {order.courier_name_sr || order.courier_name || 'Courier Dispatched'}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 800, color: order.status === 'delivered' ? '#059669' : '#4338ca', background: order.status === 'delivered' ? 'rgba(5,150,105,0.1)' : 'rgba(67,56,202,0.1)', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase' }}>
+                              {order.shipment_status ? order.shipment_status.replace('_', ' ') : order.status}
+                            </span>
                           </div>
+
+                          <div style={{ fontSize: '0.72rem', fontFamily: 'JetBrains Mono, monospace', color: '#6b6560' }}>
+                            AWB: <strong style={{ color: '#12100e' }}>{order.awb_code || order.tracking_number || 'Generated'}</strong>
+                          </div>
+
+                          <button
+                            onClick={() => handleOpenTrackingModal(order)}
+                            style={{
+                              marginTop: 4,
+                              background: '#4338ca',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: 10,
+                              padding: '8px 12px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 6
+                            }}
+                          >
+                            <RefreshCw size={12} /> Track Delivery Status
+                          </button>
                         </div>
                       )}
                     </div>
@@ -447,6 +500,72 @@ export default function MyOrders() {
                 {deleteSubmitting ? 'Deleting...' : 'Yes, Delete'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIVE SHIPROCKET TRACKING MODAL */}
+      {trackingModalOrder && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', padding: 16 }}>
+          <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: 28, padding: 32, position: 'relative', boxShadow: '0 24px 48px rgba(0,0,0,0.2)', border: '1px solid rgba(18,16,14,0.08)' }}>
+            <button 
+              onClick={() => { setTrackingModalOrder(null); setTrackingData(null); }} 
+              style={{ position: 'absolute', top: 20, right: 20, background: 'none', border: 'none', cursor: 'pointer', color: '#a09a94' }}
+            >
+              <X size={20}/>
+            </button>
+
+            <div>
+              <span style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4338ca', background: 'rgba(67,56,202,0.08)', padding: '4px 10px', borderRadius: 999 }}>
+                Shiprocket Live Tracking
+              </span>
+              <h3 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.25rem', color: '#12100e', marginTop: 10, marginBottom: 4 }}>
+                Order #{trackingModalOrder.id}
+              </h3>
+              <p style={{ fontSize: '0.78rem', color: '#6b6560', fontFamily: 'JetBrains Mono, monospace' }}>
+                AWB: <strong style={{ color: '#12100e' }}>{trackingModalOrder.awb_code || trackingModalOrder.tracking_number || 'N/A'}</strong> | Courier: {trackingModalOrder.courier_name_sr || trackingModalOrder.courier_name || 'Assigned Courier'}
+              </p>
+            </div>
+
+            {trackingLoading ? (
+              <div style={{ padding: '40px 0', textAlign: 'center', color: '#a09a94', fontSize: '0.85rem' }}>
+                <RefreshCw size={24} style={{ animation: 'spin-slow 0.8s linear infinite', margin: '0 auto 12px' }} />
+                Fetching live checkpoint status...
+              </div>
+            ) : trackingData?.events && trackingData.events.length > 0 ? (
+              <div style={{ maxHeight: 300, overflowY: 'auto', margin: '20px 0', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 8 }}>
+                {trackingData.events.map((ev, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, position: 'relative' }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#4338ca', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 800, flexShrink: 0 }}>
+                      ✓
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <strong style={{ fontSize: '0.8rem', color: '#12100e', textTransform: 'uppercase' }}>{ev.status}</strong>
+                        <span style={{ fontSize: '0.68rem', color: '#a09a94' }}>{ev.activity_at ? new Date(ev.activity_at).toLocaleString() : 'Recent'}</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: '#6b6560', margin: '2px 0 0' }}>{ev.remark}</p>
+                      {ev.location && <span style={{ fontSize: '0.68rem', color: '#a09a94', display: 'block', marginTop: 2 }}>📍 {ev.location}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: '#faf8f4', border: '1px solid rgba(18,16,14,0.08)', borderRadius: 20, padding: 24, textAlign: 'center', margin: '20px 0' }}>
+                <Package size={32} color="#a09a94" style={{ margin: '0 auto 10px' }} />
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: '#12100e', marginBottom: 4 }}>Pickup Scheduled</h4>
+                <p style={{ fontSize: '0.75rem', color: '#6b6560', margin: 0, lineHeight: 1.5 }}>
+                  The seller has prepared the package and the courier partner has been assigned for pickup.
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={() => { setTrackingModalOrder(null); setTrackingData(null); }}
+              style={{ width: '100%', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 14, padding: '12px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

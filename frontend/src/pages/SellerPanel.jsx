@@ -47,6 +47,12 @@ export default function SellerPanel() {
   const [stock, setStock] = useState(100);
   const [imageUrls, setImageUrls] = useState([]);
   const [videoUrls, setVideoUrls] = useState([]);
+
+  // Shiprocket Package Dimensions
+  const [weightKg, setWeightKg] = useState('0.50');
+  const [lengthCm, setLengthCm] = useState('10.0');
+  const [breadthCm, setBreadthCm] = useState('10.0');
+  const [heightCm, setHeightCm] = useState('5.0');
   
   // Dynamic Tiers State
   const [tiers, setTiers] = useState([
@@ -82,11 +88,17 @@ export default function SellerPanel() {
   const [sizesInput, setSizesInput] = useState('');
   const [variantsMatrix, setVariantsMatrix] = useState([]);
 
-  // Shipment Form State
-  const [shippingOrderId, setShippingOrderId] = useState(null);
-  const [courierName, setCourierName] = useState('');
-  const [trackingNumber, setTrackingNumber] = useState('');
-  const [shippingSubmitting, setShippingSubmitting] = useState(false);
+  // Shiprocket 2-Step Dispatch Modal State
+  const [shipModalOrder, setShipModalOrder] = useState(null);
+  const [shipStep, setShipStep] = useState(1); // 1 = Review & Create Shipment, 2 = Pick Courier
+  const [availableCouriers, setAvailableCouriers] = useState([]);
+  const [selectedCourier, setSelectedCourier] = useState(null);
+  const [shipLoading, setShipLoading] = useState(false);
+
+  // Live Tracking Modal State
+  const [trackingModalOrder, setTrackingModalOrder] = useState(null);
+  const [trackingData, setTrackingData] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
 
   // Security Form State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -221,6 +233,10 @@ export default function SellerPanel() {
         videos: videoUrls,
         max_group_size: parsedMax,
         group_window_hours: parseInt(groupWindowHours),
+        weight_kg: parseFloat(weightKg) || 0.50,
+        length_cm: parseFloat(lengthCm) || 10.00,
+        breadth_cm: parseFloat(breadthCm) || 10.00,
+        height_cm: parseFloat(heightCm) || 5.00,
         tiers: parsedTiers,
         variants: variantsMatrix
       };
@@ -231,6 +247,7 @@ export default function SellerPanel() {
       // Reset all form state including new fields
       setName(''); setSku(''); setDescription(''); setStock(100);
       setImageUrls([]); setVideoUrls([]);
+      setWeightKg('0.50'); setLengthCm('10.0'); setBreadthCm('10.0'); setHeightCm('5.0');
       setTiers([{ group_size: 1, price: '' }, { group_size: '', price: '' }]);
       setMaxGroupSize(10);
       setGroupWindowHours(24);
@@ -282,48 +299,40 @@ export default function SellerPanel() {
     });
   };
 
-  const handleVariantImageUpload = (idx, e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image size must be less than 2MB');
-      return;
+  const handleColorToggle = (colorName) => {
+    let next;
+    if (selectedColors.includes(colorName)) {
+      next = selectedColors.filter(c => c !== colorName);
+    } else {
+      next = [...selectedColors, colorName];
     }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const updated = [...variantsMatrix];
-      updated[idx].image_url = reader.result;
-      setVariantsMatrix(updated);
-    };
-    reader.readAsDataURL(file);
+    setSelectedColors(next);
+    regenerateVariants(next, sizesInput);
   };
 
-  const toggleColor = (colorName) => {
-    setSelectedColors(prev => 
-      prev.includes(colorName) ? prev.filter(c => c !== colorName) : [...prev, colorName]
-    );
+  const handleSizesChange = (e) => {
+    const val = e.target.value;
+    setSizesInput(val);
+    regenerateVariants(selectedColors, val);
   };
 
-  const handleGenerateVariants = () => {
-    const colors = selectedColors;
-    const sizes = sizesInput.split(',').map(s => s.trim()).filter(Boolean);
-    
+  const regenerateVariants = (colors, rawSizes) => {
+    const sizes = rawSizes.split(',').map(s => s.trim()).filter(Boolean);
     if (colors.length === 0 && sizes.length === 0) {
       setVariantsMatrix([]);
       return;
     }
-    
+    const colorList = colors.length > 0 ? colors : [null];
+    const sizeList = sizes.length > 0 ? sizes : [null];
+
     const newMatrix = [];
-    const cList = colors.length > 0 ? colors : ['Default'];
-    const sList = sizes.length > 0 ? sizes : ['Default'];
-    
-    cList.forEach(c => {
-      sList.forEach(s => {
-        const existing = variantsMatrix.find(v => v.color === c && v.size === s);
+    colorList.forEach(color => {
+      sizeList.forEach(size => {
+        const existing = variantsMatrix.find(v => v.color === color && v.size === size);
         newMatrix.push({
-          color: c,
-          size: s,
-          stock: existing ? existing.stock : 0,
+          color,
+          size,
+          stock: existing ? existing.stock : 10,
           image_url: existing ? existing.image_url : null
         });
       });
@@ -337,28 +346,92 @@ export default function SellerPanel() {
     setVariantsMatrix(updated);
   };
 
+  // ==========================================
+  // SHIPROCKET 2-STEP DISPATCH HANDLERS
+  // ==========================================
+
+  const handleOpenShipModal = async (order) => {
+    setShipModalOrder(order);
+    setSelectedCourier(null);
+
+    // If shipment was already created and is awaiting courier selection
+    if (order.shipment_status === 'courier_pending' && order.shiprocket_order_id) {
+      setShipStep(2);
+      setShipLoading(true);
+      try {
+        const res = await api.get(`/shiprocket/orders/${order.id}/couriers`);
+        setAvailableCouriers(res.data.couriers || []);
+      } catch (err) {
+        toast.error('Failed to load couriers. You can regenerate shipment.');
+        setShipStep(1);
+      } finally {
+        setShipLoading(false);
+      }
+    } else {
+      setShipStep(1);
+      setAvailableCouriers([]);
+    }
+  };
+
   /**
-   * Ship order submit handler
+   * Step 1: Create Shipment & Fetch Real-Time Courier Rates
    */
-  const handleShipOrder = async (e) => {
-    e.preventDefault();
-    if (!courierName || !trackingNumber) return toast.error('Courier name and tracking code are required');
-    
-    setShippingSubmitting(true);
+  const handleCreateShipmentStep1 = async () => {
+    if (!shipModalOrder) return;
+    setShipLoading(true);
     try {
-      await api.put(`/seller/orders/${shippingOrderId}/ship`, {
-        courier_name: courierName,
-        tracking_number: trackingNumber
-      });
-      toast.success('Order status updated to Shipped!');
-      setShippingOrderId(null);
-      setCourierName('');
-      setTrackingNumber('');
+      const res = await api.post(`/shiprocket/orders/${shipModalOrder.id}/create-shipment`);
+      setAvailableCouriers(res.data.couriers || []);
+      setShipStep(2);
+      toast.success('Shipment created on Shiprocket! Choose your courier partner.');
       fetchSellerData();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to update order shipment');
+      toast.error(err.response?.data?.error || 'Failed to create shipment on Shiprocket');
     } finally {
-      setShippingSubmitting(false);
+      setShipLoading(false);
+    }
+  };
+
+  /**
+   * Step 2: Assign Selected Courier & Generate AWB
+   */
+  const handleAssignCourierStep2 = async () => {
+    if (!shipModalOrder || !selectedCourier) {
+      return toast.error('Please select a courier partner');
+    }
+    setShipLoading(true);
+    try {
+      const res = await api.post(`/shiprocket/orders/${shipModalOrder.id}/assign-courier`, {
+        courier_id: selectedCourier.courier_company_id,
+        courier_name: selectedCourier.courier_name,
+        rate: selectedCourier.rate,
+        estimated_delivery_days: selectedCourier.estimated_delivery_days
+      });
+      toast.success(`Dispatched via ${selectedCourier.courier_name}! AWB: ${res.data.awb_code}`);
+      setShipModalOrder(null);
+      setSelectedCourier(null);
+      fetchSellerData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to assign courier');
+    } finally {
+      setShipLoading(false);
+    }
+  };
+
+  /**
+   * Live Order Tracking Modal
+   */
+  const handleOpenTrackingModal = async (order) => {
+    setTrackingModalOrder(order);
+    setTrackingLoading(true);
+    setTrackingData(null);
+    try {
+      const res = await api.get(`/shiprocket/orders/${order.id}/tracking`);
+      setTrackingData(res.data);
+    } catch (err) {
+      toast.error('Unable to fetch live tracking at the moment');
+    } finally {
+      setTrackingLoading(false);
     }
   };
 
@@ -477,12 +550,9 @@ export default function SellerPanel() {
         <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl hover:bg-[rgba(91,33,182,0.06)] transition-colors">
           <Menu size={20} className="text-[#5b21b6]" />
         </button>
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center">
-            <span className="text-white font-bold text-sm">S</span>
-          </div>
-          <span className="font-display font-bold text-base text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span></span>
-        </div>
+        <Link to="/" className="flex items-center">
+          <img src="/slabofy-logo.png" alt="Slabofy" style={{ height: 32, width: 'auto', objectFit: 'contain' }} />
+        </Link>
       </div>
 
       {/* Mobile Drawer Overlay */}
@@ -491,7 +561,9 @@ export default function SellerPanel() {
           <div className="drawer-overlay lg:hidden" onClick={() => setSidebarOpen(false)} />
           <div className="drawer-panel sidebar-light lg:hidden flex flex-col">
             <div className="h-14 flex items-center px-5 border-b border-[rgba(91,33,182,0.08)]">
-              <span className="font-display font-bold text-base text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span> Merchant</span>
+              <Link to="/" onClick={() => setSidebarOpen(false)}>
+                <img src="/slabofy-logo.png" alt="Slabofy" style={{ height: 34, width: 'auto', objectFit: 'contain' }} />
+              </Link>
             </div>
             
             {stats && (
@@ -555,14 +627,8 @@ export default function SellerPanel() {
           <div className="orb-ambient w-48 h-48 bg-violet-200/30 -top-12 -left-12" style={{ animationDelay: '-3s' }} />
 
           <div className="h-16 flex items-center px-5 border-b border-[rgba(91,33,182,0.08)] relative z-10">
-            <Link to="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center shadow-lg shadow-violet-500/20">
-                <span className="text-white font-bold text-base">S</span>
-              </div>
-              <div>
-                <div className="font-display font-black text-sm text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span></div>
-                <div className="text-[8px] font-bold uppercase text-[#9490b8] tracking-widest">Merchant Portal</div>
-              </div>
+            <Link to="/" className="flex items-center">
+              <img src="/slabofy-logo.png" alt="Slabofy — Buy Together. Save Together." style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
             </Link>
           </div>
 
@@ -705,11 +771,22 @@ export default function SellerPanel() {
                     <div className="text-xs text-[#6b6560]">Buyer: {order.buyer_name}</div>
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                       <div className="text-sm font-black text-[#5b21b6]">{formatCurrency(order.total_amount)}</div>
-                      {order.status === 'confirmed' && (
-                        <button onClick={() => setShippingOrderId(order.id)} className="text-xs font-bold bg-[#5b21b6] text-white px-3 py-1.5 rounded-xl">
-                          Ship Now
+                      {order.status === 'confirmed' ? (
+                        <button 
+                          onClick={() => handleOpenShipModal(order)} 
+                          className="text-xs font-bold bg-[#4338ca] text-white px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                        >
+                          <Truck size={13} />
+                          Dispatch Shiprocket
                         </button>
-                      )}
+                      ) : order.status === 'shipped' ? (
+                        <button 
+                          onClick={() => handleOpenTrackingModal(order)}
+                          className="text-xs font-bold bg-indigo-50 text-[#4338ca] border border-indigo-200 px-3 py-1.5 rounded-xl cursor-pointer"
+                        >
+                          Track #{order.awb_code || order.tracking_number || order.id}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -725,7 +802,7 @@ export default function SellerPanel() {
                     <th className="py-4 px-6">Buyer info</th>
                     <th className="py-4 px-6">Buy Type</th>
                     <th className="py-4 px-6">Financials</th>
-                    <th className="py-4 px-6">Fulfillment</th>
+                    <th className="py-4 px-6">Shiprocket Fulfillment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
@@ -738,10 +815,12 @@ export default function SellerPanel() {
                       <td className="py-4 px-6">
                         <strong className="text-[#12100e] block">{ord.product_name}</strong>
                         <span className="text-[10px] text-[#6b6560]">SKU: {ord.product_sku || 'N/A'}</span>
+                        <span className="text-[9px] text-[#9490b8] block">Weight: {ord.product_weight_kg || 0.5}kg | Dim: {ord.product_length_cm || 10}x{ord.product_breadth_cm || 10}x{ord.product_height_cm || 5}cm</span>
                       </td>
                       <td className="py-4 px-6">
                         <span className="text-[#12100e] block font-medium">{ord.buyer_name}</span>
                         <span className="text-[10px] text-[#6b6560]">{ord.buyer_phone}</span>
+                        <span className="text-[9px] text-[#9490b8] block truncate max-w-[150px]">{ord.shipping_address}</span>
                       </td>
                       <td className="py-4 px-6">
                         {!ord.group_id ? (
@@ -772,17 +851,24 @@ export default function SellerPanel() {
                           <span className="bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-bold px-2 py-0.5 rounded-full inline-block uppercase">Waiting for Group</span>
                         ) : ord.status === 'confirmed' ? (
                           <button
-                            onClick={() => setShippingOrderId(ord.id)}
-                            className="bg-brand-blue text-white font-bold px-3 py-1.5 rounded-lg text-[10px] flex items-center gap-1 cursor-pointer hover:opacity-90 active:scale-95"
+                            onClick={() => handleOpenShipModal(ord)}
+                            className="bg-[#4338ca] text-white font-bold px-3 py-2 rounded-xl text-[11px] flex items-center gap-1.5 cursor-pointer hover:bg-[#3730a3] active:scale-95 shadow-sm"
                           >
-                            <Truck size={12} />
+                            <Truck size={14} />
                             Dispatch Courier
                           </button>
                         ) : ord.status === 'shipped' ? (
-                          <div className="space-y-0.5">
-                            <span className="bg-blue-500/10 text-blue-600 border border-blue-500/20 text-[9px] font-bold px-2 py-0.5 rounded-full inline-block">SHIPPED</span>
-                            <span className="text-[10px] text-[#6b6560] block">{ord.courier_name}</span>
-                            <span className="text-[10px] text-[#5b21b6] block font-mono select-all font-bold">#{ord.tracking_number}</span>
+                          <div className="space-y-1.5">
+                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-2 py-0.5 rounded-full inline-block">
+                              {ord.shipment_status ? ord.shipment_status.replace('_', ' ').toUpperCase() : 'SHIPPED'}
+                            </span>
+                            <span className="text-[10px] text-[#12100e] font-semibold block">{ord.courier_name_sr || ord.courier_name}</span>
+                            <button
+                              onClick={() => handleOpenTrackingModal(ord)}
+                              className="text-[10px] text-[#4338ca] font-mono font-bold hover:underline block cursor-pointer"
+                            >
+                              AWB: {ord.awb_code || ord.tracking_number || 'View'} &rarr;
+                            </button>
                           </div>
                         ) : (
                           <span className="bg-gray-100 text-[#12100e] border border-gray-200 text-[9px] font-bold px-2 py-0.5 rounded-full inline-block uppercase">{ord.status}</span>
@@ -842,7 +928,7 @@ export default function SellerPanel() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs text-[#9490b8] font-semibold uppercase">Category Mapping</label>
                 <select
@@ -868,8 +954,77 @@ export default function SellerPanel() {
                   required
                 />
               </div>
+            </div>
 
-              <div className="space-y-2 sm:col-span-3">
+            {/* Package Dimensions for Shiprocket Shipping */}
+            <div className="bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-2xl p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Truck size={16} className="text-[#4338ca]" />
+                  <span className="text-xs font-bold text-[#1e1b4b]">Shipping & Package Dimensions (Shiprocket)</span>
+                </div>
+                <span className="text-[10px] text-[#9490b8]">Required for live courier rates & dispatch</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#9490b8] font-bold uppercase">Weight (kg)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="0.5"
+                    value={weightKg}
+                    onChange={(e) => setWeightKg(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2 px-3 text-xs text-[#1e1b4b]"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#9490b8] font-bold uppercase">Length (cm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.5"
+                    placeholder="10"
+                    value={lengthCm}
+                    onChange={(e) => setLengthCm(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2 px-3 text-xs text-[#1e1b4b]"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#9490b8] font-bold uppercase">Breadth (cm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.5"
+                    placeholder="10"
+                    value={breadthCm}
+                    onChange={(e) => setBreadthCm(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2 px-3 text-xs text-[#1e1b4b]"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#9490b8] font-bold uppercase">Height (cm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.5"
+                    placeholder="5"
+                    value={heightCm}
+                    onChange={(e) => setHeightCm(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2 px-3 text-xs text-[#1e1b4b]"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Media Uploads Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <label className="text-xs text-[#9490b8] font-semibold uppercase">Product Images (Up to 10)</label>
                 <div className="flex flex-wrap gap-4 items-center">
                   {imageUrls.map((url, i) => (
@@ -906,7 +1061,7 @@ export default function SellerPanel() {
                 </div>
               </div>
 
-              <div className="space-y-2 sm:col-span-3">
+              <div className="space-y-2">
                 <label className="text-xs text-[#9490b8] font-semibold uppercase">Product Videos (Up to 2)</label>
                 <div className="flex flex-wrap gap-4 items-center">
                   {videoUrls.map((url, i) => (
@@ -1336,55 +1491,231 @@ export default function SellerPanel() {
         </div>
       )}
 
-      {/* DISPATCH COURIER MODAL */}
-      {shippingOrderId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-md glass-panel rounded-3xl p-6 md:p-8 space-y-6 relative border border-[rgba(99,102,241,0.15)] glow-cyan">
-            
-            <h3 className="text-xl font-bold font-display text-[#1e1b4b]">Fulfill & Dispatch Order #{shippingOrderId}</h3>
-            
-            <form onSubmit={handleShipOrder} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#9490b8] font-bold uppercase">Courier Name / Shipping Provider</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Delhivery, BlueDart, DHL"
-                  value={courierName}
-                  onChange={(e) => setCourierName(e.target.value)}
-                  className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2.5 px-3.5 text-xs text-[#1e1b4b]"
-                  required
-                />
-              </div>
+      {/* SHIPROCKET 2-STEP MANUAL DISPATCH MODAL */}
+      {shipModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-xl bg-white rounded-3xl p-6 md:p-8 space-y-6 relative border border-gray-200 shadow-2xl">
+            <button 
+              onClick={() => setShipModalOrder(null)} 
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <X size={20}/>
+            </button>
 
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#9490b8] font-bold uppercase">Tracking Code / AWB Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 192830293022"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2.5 px-3.5 text-xs text-[#1e1b4b] font-mono"
-                  required
-                />
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-[#4338ca] flex items-center justify-center">
+                <Truck size={24} />
               </div>
+              <div>
+                <h3 className="text-lg font-bold font-display text-[#1e1b4b]">
+                  Shiprocket Dispatch — Order #{shipModalOrder.id}
+                </h3>
+                <p className="text-xs text-[#9490b8]">
+                  {shipStep === 1 ? 'Step 1: Order & Dimensions Verification' : 'Step 2: Select Courier Partner'}
+                </p>
+              </div>
+            </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShippingOrderId(null)}
-                  className="flex-1 bg-white/5 border border-[rgba(99,102,241,0.15)] text-[#1e1b4b] rounded-xl py-2.5 text-xs font-semibold hover:bg-white/10 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={shippingSubmitting}
-                  className="flex-1 bg-brand-cyan text-white rounded-xl py-2.5 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer hover:opacity-90 disabled:opacity-50"
-                >
-                  {shippingSubmitting ? 'Submitting...' : 'Ship Order'}
-                </button>
+            {/* Step 1: Verification & Generate Couriers */}
+            {shipStep === 1 && (
+              <div className="space-y-4">
+                <div className="bg-[#faf8f4] border border-gray-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#6b6560]">Product:</span>
+                    <strong className="text-[#12100e] text-right">{shipModalOrder.product_name}</strong>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#6b6560]">Buyer Destination:</span>
+                    <strong className="text-[#12100e] text-right">{shipModalOrder.shipping_address}</strong>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#6b6560]">Payment Type:</span>
+                    <strong className={`uppercase ${shipModalOrder.is_cod ? 'text-amber-600' : 'text-green-600'}`}>
+                      {shipModalOrder.is_cod ? 'Cash on Delivery (COD)' : 'Prepaid (Online)'}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between text-xs pt-2 border-t border-gray-200">
+                    <span className="text-[#6b6560]">Package Dimensions:</span>
+                    <span className="text-[#12100e] font-mono font-semibold">
+                      {shipModalOrder.product_weight_kg || 0.5}kg | {shipModalOrder.product_length_cm || 10}x{shipModalOrder.product_breadth_cm || 10}x{shipModalOrder.product_height_cm || 5}cm
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-3.5 flex items-start gap-2.5">
+                  <ShieldCheck size={18} className="text-[#4338ca] flex-shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-[#4c4775] leading-relaxed">
+                    Clicking below will register this shipment on your Shiprocket account and fetch live courier rates, estimated delivery times, and coverage for the buyer's destination.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShipModalOrder(null)}
+                    className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateShipmentStep1}
+                    disabled={shipLoading}
+                    className="flex-[2] bg-[#4338ca] text-white rounded-xl py-3 text-xs font-bold flex items-center justify-center gap-2 hover:bg-[#3730a3] disabled:opacity-50 cursor-pointer shadow-md shadow-indigo-500/20"
+                  >
+                    {shipLoading ? 'Connecting to Shiprocket...' : 'Find Available Couriers & Rates →'}
+                  </button>
+                </div>
               </div>
-            </form>
+            )}
+
+            {/* Step 2: Courier Selection */}
+            {shipStep === 2 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#1e1b4b] uppercase tracking-wider">
+                    Available Courier Partners ({availableCouriers.length})
+                  </label>
+                  <button 
+                    onClick={handleCreateShipmentStep1}
+                    className="text-[11px] text-[#4338ca] font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <RefreshCw size={12}/> Refresh Rates
+                  </button>
+                </div>
+
+                {availableCouriers.length === 0 ? (
+                  <div className="p-6 text-center bg-gray-50 rounded-2xl border border-gray-200">
+                    <p className="text-xs text-[#6b6560]">No couriers found for this route or pincode.</p>
+                  </div>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
+                    {availableCouriers.map((c) => {
+                      const isSelected = selectedCourier?.courier_company_id === c.courier_company_id;
+                      return (
+                        <div
+                          key={c.courier_company_id}
+                          onClick={() => setSelectedCourier(c)}
+                          className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                            isSelected
+                              ? 'border-[#4338ca] bg-indigo-50/60 shadow-sm ring-2 ring-[#4338ca]/20'
+                              : 'border-gray-200 hover:border-gray-300 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                              isSelected ? 'border-[#4338ca] bg-[#4338ca]' : 'border-gray-300'
+                            }`}>
+                              {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                            </div>
+                            <div>
+                              <strong className="text-xs font-bold text-[#1e1b4b] block">{c.courier_name}</strong>
+                              <span className="text-[10px] text-[#9490b8]">Est. Delivery: {c.estimated_delivery_days}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-sm font-black text-[#5b21b6] block">₹{c.rate}</span>
+                            {c.cod_available ? (
+                              <span className="text-[9px] font-bold text-green-600 uppercase">COD Supported</span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-gray-400 uppercase">Prepaid Only</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShipStep(1)}
+                    className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                  >
+                    &larr; Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAssignCourierStep2}
+                    disabled={!selectedCourier || shipLoading}
+                    className="flex-[2] bg-green-600 text-white rounded-xl py-3 text-xs font-bold flex items-center justify-center gap-2 hover:bg-green-700 disabled:opacity-50 cursor-pointer shadow-md shadow-green-600/20"
+                  >
+                    {shipLoading ? 'Generating AWB & Scheduling...' : `Confirm & Dispatch (${selectedCourier ? selectedCourier.courier_name : 'Select Courier'})`}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* LIVE TRACKING MODAL */}
+      {trackingModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 md:p-8 space-y-6 relative border border-gray-200 shadow-2xl">
+            <button 
+              onClick={() => { setTrackingModalOrder(null); setTrackingData(null); }} 
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <X size={20}/>
+            </button>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#4338ca] bg-indigo-50 px-2.5 py-1 rounded-full">
+                Shiprocket Tracking
+              </span>
+              <h3 className="text-xl font-bold font-display text-[#1e1b4b] mt-2">
+                Order #{trackingModalOrder.id}
+              </h3>
+              <p className="text-xs text-[#6b6560] font-mono mt-0.5">
+                AWB: <strong className="text-[#1e1b4b]">{trackingModalOrder.awb_code || trackingModalOrder.tracking_number || 'N/A'}</strong> | Courier: {trackingModalOrder.courier_name_sr || trackingModalOrder.courier_name || 'Assigned Courier'}
+              </p>
+            </div>
+
+            {trackingLoading ? (
+              <div className="py-12 text-center text-xs text-[#9490b8] animate-pulse">
+                Fetching latest shipment status from Shiprocket...
+              </div>
+            ) : trackingData?.events && trackingData.events.length > 0 ? (
+              <div className="max-h-72 overflow-y-auto space-y-4 pr-2">
+                {trackingData.events.map((ev, idx) => (
+                  <div key={idx} className="flex items-start gap-3 relative">
+                    {idx < trackingData.events.length - 1 && (
+                      <div className="absolute left-2.5 top-6 bottom-0 w-0.5 bg-indigo-100" />
+                    )}
+                    <div className="w-5 h-5 rounded-full bg-[#4338ca] text-white flex items-center justify-center flex-shrink-0 z-10 text-[10px]">
+                      ✓
+                    </div>
+                    <div className="flex-1 pb-3">
+                      <div className="flex items-center justify-between">
+                        <strong className="text-xs font-bold text-[#1e1b4b] uppercase">{ev.status}</strong>
+                        <span className="text-[10px] text-[#9490b8]">{ev.activity_at ? new Date(ev.activity_at).toLocaleString() : 'Recent'}</span>
+                      </div>
+                      <p className="text-xs text-[#6b6560] mt-0.5">{ev.remark}</p>
+                      {ev.location && <span className="text-[10px] text-[#9490b8] font-medium mt-0.5 block">📍 {ev.location}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-[#faf8f4] border border-gray-200 rounded-2xl p-6 text-center space-y-2">
+                <Package size={28} className="mx-auto text-[#9490b8]" />
+                <h4 className="text-xs font-bold text-[#1e1b4b]">Pickup Scheduled</h4>
+                <p className="text-[11px] text-[#6b6560]">
+                  Courier partner has been assigned and pickup is scheduled. Live checkpoint scans will appear once the parcel is scanned at the hub.
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={() => { setTrackingModalOrder(null); setTrackingData(null); }}
+              className="w-full bg-gray-100 text-gray-700 font-bold rounded-xl py-3 text-xs hover:bg-gray-200 cursor-pointer"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

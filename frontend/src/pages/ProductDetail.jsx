@@ -147,15 +147,15 @@ export default function ProductDetail() {
       </div>
 
       {/* Main Product Layout */}
-      <div style={{ maxWidth: 1320, margin: '0 auto', padding: '32px 24px 64px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, alignItems: 'start' }}>
+      <div style={{ maxWidth: 1320, margin: '0 auto', padding: '24px 16px 64px' }}>
+        <div className="grid-responsive-2col">
 
           {/* LEFT — Images */}
-          <div ref={revealRef1} className="scroll-reveal-group" style={{ flex: '1 1 50%', minWidth: 320 }}>
+          <div ref={revealRef1} className="scroll-reveal-group" style={{ width: '100%' }}>
             {/* Main Image */}
             <div ref={tiltRef} className="tilt-card" style={{
               background: '#f2ede4', borderRadius: 28, overflow: 'hidden', aspectRatio: '4/3', marginBottom: 16,
-              boxShadow: '0 24px 60px rgba(18,16,14,0.06)', position: 'relative'
+              boxShadow: '0 24px 60px rgba(18,16,14,0.06)', position: 'relative', width: '100%'
             }}>
               <div className="tilt-card-inner" style={{ width: '100%', height: '100%' }}>
                 <img
@@ -191,7 +191,7 @@ export default function ProductDetail() {
           </div>
 
           {/* RIGHT — Info + Buy Panel */}
-          <div ref={revealRef2} className="scroll-reveal-group" style={{ flex: '1 1 40%', minWidth: 320, position: 'sticky', top: 96, maxHeight: 'calc(100vh - 96px)', overflowY: 'auto', paddingRight: 8 }}>
+          <div ref={revealRef2} className="scroll-reveal-group" style={{ width: '100%' }}>
             
             <div className="animate-fade-in-up" style={{ animationDelay: '100ms' }}>
               <span className="badge-pill badge-ink" style={{ marginBottom: 16, display: 'inline-flex', background: 'rgba(91,33,182,0.08)', padding: '4px 12px', borderRadius: 999, color: '#5b21b6', fontSize: '0.65rem', fontWeight: 800 }}>

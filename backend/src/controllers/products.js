@@ -8,7 +8,11 @@ export const createProduct = async (req, res) => {
     name, description, images, videos, category_id,
     sku, stock, tiers, variants,
     max_group_size,
-    group_window_hours
+    group_window_hours,
+    weight_kg,
+    length_cm,
+    breadth_cm,
+    height_cm
   } = req.body;
   const sellerId = req.user.id;
 
@@ -91,11 +95,12 @@ export const createProduct = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Create product
+    // Create product with Shiprocket package dimensions
     const productQuery = `
       INSERT INTO products 
-        (seller_id, category_id, name, description, images, videos, sku, stock, status, max_group_size, group_window_hours)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
+        (seller_id, category_id, name, description, images, videos, sku, stock, status, max_group_size, group_window_hours,
+         weight_kg, length_cm, breadth_cm, height_cm)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, $14)
       RETURNING *
     `;
     const productVal = [
@@ -108,7 +113,11 @@ export const createProduct = async (req, res) => {
       sku || null,
       stock,
       parsedMaxGroupSize,
-      parsedWindowHours
+      parsedWindowHours,
+      parseFloat(weight_kg) || 0.50,
+      parseFloat(length_cm) || 10.00,
+      parseFloat(breadth_cm) || 10.00,
+      parseFloat(height_cm) || 5.00
     ];
     const productResult = await client.query(productQuery, productVal);
     const newProduct = productResult.rows[0];
@@ -159,7 +168,7 @@ export const createProduct = async (req, res) => {
  */
 export const editProduct = async (req, res) => {
   const { id } = req.params;
-  const { description, images, stock } = req.body;
+  const { description, images, stock, weight_kg, length_cm, breadth_cm, height_cm } = req.body;
   const sellerId = req.user.id;
 
   try {
@@ -196,6 +205,30 @@ export const editProduct = async (req, res) => {
     if (stock !== undefined) {
       updateFields.push(`stock = $${paramIndex}`);
       queryParams.push(stock);
+      paramIndex++;
+    }
+
+    if (weight_kg !== undefined) {
+      updateFields.push(`weight_kg = $${paramIndex}`);
+      queryParams.push(parseFloat(weight_kg) || 0.50);
+      paramIndex++;
+    }
+
+    if (length_cm !== undefined) {
+      updateFields.push(`length_cm = $${paramIndex}`);
+      queryParams.push(parseFloat(length_cm) || 10.00);
+      paramIndex++;
+    }
+
+    if (breadth_cm !== undefined) {
+      updateFields.push(`breadth_cm = $${paramIndex}`);
+      queryParams.push(parseFloat(breadth_cm) || 10.00);
+      paramIndex++;
+    }
+
+    if (height_cm !== undefined) {
+      updateFields.push(`height_cm = $${paramIndex}`);
+      queryParams.push(parseFloat(height_cm) || 5.00);
       paramIndex++;
     }
 

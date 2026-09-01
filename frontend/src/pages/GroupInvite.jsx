@@ -107,7 +107,7 @@ export default function GroupInvite() {
   const progressPct = Math.round((group.current_size / group.target_size) * 100);
 
   return (
-    <div className="mesh-violet" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', position: 'relative', overflow: 'hidden' }}>
+    <div className="mesh-violet" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 16px', position: 'relative', overflow: 'hidden' }}>
       
       {/* Decorative background blobs */}
       <div className="blob" style={{ position: 'absolute', top: '-10%', left: '-10%', width: 400, height: 400, background: 'radial-gradient(circle, rgba(91,33,182,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
@@ -117,8 +117,8 @@ export default function GroupInvite() {
         background: 'rgba(255,255,255,0.95)',
         backdropFilter: 'blur(20px)',
         border: '1px solid rgba(255,255,255,0.5)',
-        borderRadius: 32,
-        padding: '40px 32px',
+        borderRadius: 28,
+        padding: 'clamp(20px, 5vw, 36px)',
         maxWidth: 480, width: '100%',
         boxShadow: '0 32px 80px rgba(91,33,182,0.12), 0 2px 10px rgba(18,16,14,0.04)',
         textAlign: 'center',
