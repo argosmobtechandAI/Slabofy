@@ -581,7 +581,7 @@ export default function AdminPanel() {
                             
                             {sel.kyc_document_url && (
                               <a 
-                                href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${sel.kyc_document_url}`} 
+                                href={`${(import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '')}${sel.kyc_document_url}`} 
                                 target="_blank" 
                                 rel="noreferrer"
                                 className="text-[#4338ca] hover:underline font-bold flex items-center gap-1"

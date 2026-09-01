@@ -125,10 +125,11 @@ export default function ProductDetail() {
 
   const displayImage = (currentVariant && currentVariant.image_url) ? currentVariant.image_url : images[selectedImage];
 
-  const soloTier = product.tiers?.find(t => t.group_size === 1);
+  const tiers = product.tiers || [];
+  const soloTier = tiers.find(t => t.group_size === 1);
   const soloPrice = soloTier ? parseFloat(soloTier.price) : 0;
-  const groupTiers = product.tiers?.filter(t => t.group_size > 1) || [];
-  const bestTier = groupTiers.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b, groupTiers[0]);
+  const groupTiers = tiers.filter(t => t.group_size > 1) || [];
+  const bestTier = groupTiers.length > 0 ? groupTiers.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b, groupTiers[0]) : null;
 
   return (
     <div style={{ background: '#faf8f4', minHeight: '100vh' }}>

@@ -1246,7 +1246,7 @@ export default function SellerPanel() {
               <div className="col-span-1 md:col-span-2 space-y-1">
                 <span className="text-[10px] font-bold text-[#b4b0d0] uppercase tracking-wider">KYC Document</span>
                 {profile.kyc_document_url ? (
-                  <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${profile.kyc_document_url}`} target="_blank" rel="noreferrer" className="text-brand-blue font-semibold hover:underline block">
+                  <a href={`${(import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '')}${profile.kyc_document_url}`} target="_blank" rel="noreferrer" className="text-brand-blue font-semibold hover:underline block">
                     View Uploaded Document
                   </a>
                 ) : (

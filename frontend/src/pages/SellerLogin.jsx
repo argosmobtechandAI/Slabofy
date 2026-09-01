@@ -121,7 +121,7 @@ export default function SellerLogin() {
       const formData = new FormData();
       formData.append('document', documentFile);
 
-      const uploadRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/upload`, {
+      const uploadRes = await fetch(`${(import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '')}/api/upload`, {
         method: 'POST',
         body: formData,
       });

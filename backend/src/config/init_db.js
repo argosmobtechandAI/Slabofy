@@ -22,7 +22,10 @@ async function initDatabase() {
   }
 
   console.log('Connecting to PostgreSQL database...');
-  const client = new Client({ connectionString: dbUrl });
+  let client = new Client({
+    connectionString: dbUrl,
+    ssl: false
+  });
 
   try {
     await client.connect();
@@ -32,12 +35,19 @@ async function initDatabase() {
     console.log(`Reading SQL schema from: ${schemaPath}`);
     const sqlContent = fs.readFileSync(schemaPath, 'utf8');
 
-    console.log('Executing database schema creation & seeds...');
-    // We execute the raw SQL file contents
+    console.log('Executing database schema creation & default admin seeds...');
     await client.query(sqlContent);
 
+    const seedPath = path.join(__dirname, 'seed_products.sql');
+    if (fs.existsSync(seedPath)) {
+      console.log(`Reading catalog seed products from: ${seedPath}`);
+      const seedContent = fs.readFileSync(seedPath, 'utf8');
+      console.log('Executing product & tier seeding...');
+      await client.query(seedContent);
+    }
+
     console.log('==================================================');
-    console.log('🎉 Database Schema & Seeds initialized successfully!');
+    console.log('🎉 Database Schema & Catalog initialized successfully!');
     console.log('==================================================');
   } catch (err) {
     console.error('❌ Database Initialization failed:');

@@ -10,17 +10,16 @@ dotenv.config();
 const { Pool } = pg;
 
 const connectionString = process.env.DATABASE_URL;
-const isSupabaseOrCloud = connectionString && (
-  connectionString.includes('supabase') || 
-  connectionString.includes('neon') || 
-  connectionString.includes('aws') || 
-  connectionString.includes('elephantsql') ||
-  process.env.NODE_ENV === 'production'
+const requiresSSL = connectionString && (
+  connectionString.includes('sslmode=require') ||
+  connectionString.includes('.supabase.co') ||
+  connectionString.includes('.neon.tech') ||
+  connectionString.includes('.rds.amazonaws.com')
 );
 
 export const pool = new Pool({
   connectionString,
-  ssl: isSupabaseOrCloud ? { rejectUnauthorized: false } : false
+  ssl: requiresSSL ? { rejectUnauthorized: false } : false
 });
 
 pool.on('connect', () => {

@@ -5,7 +5,7 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import {
   ShoppingBag, Users, Truck, ShieldCheck, RefreshCw,
-  Package, Clock, CheckCircle, ChevronRight, LogOut, FileText, Share2, Copy, Lock, Trash2, X, AlertTriangle, User
+  Package, Clock, CheckCircle, ChevronRight, ArrowRight, LogOut, FileText, Share2, Copy, Lock, Trash2, X, AlertTriangle, User
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useScrollReveal from '../hooks/useScrollReveal';
