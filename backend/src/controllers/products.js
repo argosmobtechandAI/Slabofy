@@ -288,10 +288,10 @@ export const getProducts = async (req, res) => {
       SELECT p.*, c.name as category_name,
              (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = 1) as solo_price,
              (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = p.max_group_size) as best_price,
-             (
+             COALESCE((
                SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price))
                FROM product_tiers pt WHERE pt.product_id = p.id
-             ) as tiers,
+             ), '[]'::json) as tiers,
              (
                SELECT COUNT(*)::int 
                FROM groups g 
@@ -337,10 +337,10 @@ export const getProductDetail = async (req, res) => {
   try {
     const productQuery = `
       SELECT p.*, c.name as category_name,
-             (
+             COALESCE((
                SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price) ORDER BY pt.group_size ASC)
                FROM product_tiers pt WHERE pt.product_id = p.id
-             ) as tiers,
+             ), '[]'::json) as tiers,
              COALESCE((
                SELECT json_agg(json_build_object('id', pv.id, 'color', pv.color, 'size', pv.size, 'stock', pv.stock, 'image_url', pv.image_url))
                FROM product_variants pv WHERE pv.product_id = p.id

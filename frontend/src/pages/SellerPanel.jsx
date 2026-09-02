@@ -3,7 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Store, Tag, Plus, PlusCircle, ShoppingCart, RefreshCw, AlertTriangle, ArrowRight, ShieldCheck, CheckCircle2, Truck, HelpCircle, User, Lock, Trash2, X, UploadCloud, Video, Users, Menu, TrendingUp, Clock, Package } from 'lucide-react';
+import { 
+  Store, Tag, Plus, PlusCircle, ShoppingCart, RefreshCw, AlertTriangle, ArrowRight, 
+  ShieldCheck, CheckCircle2, Truck, HelpCircle, User, Lock, Trash2, X, UploadCloud, 
+  Video, Users, Menu, TrendingUp, Clock, Package, DollarSign, CreditCard, Layers, 
+  Download, Check, LifeBuoy, MessageSquare, Search, Edit3, Phone, Mail, FileText
+} from 'lucide-react';
 import { Navigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -20,6 +25,57 @@ const PREDEFINED_COLORS = [
   { name: 'Orange', hex: '#f97316' },
 ];
 
+const VARIANT_DIMENSION_PRESETS = {
+  clothing: {
+    label: 'Apparel / Clothing Sizes',
+    unitName: 'Size',
+    presets: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'],
+    placeholder: 'e.g. S, M, L, XL'
+  },
+  waist: {
+    label: 'Waist Size (Inches)',
+    unitName: 'Waist',
+    presets: ['28in', '30in', '32in', '34in', '36in', '38in', '40in', '42in'],
+    placeholder: 'e.g. 28in, 30in, 32in'
+  },
+  shoe: {
+    label: 'Footwear / Shoe Size',
+    unitName: 'Shoe Size',
+    presets: ['UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10', 'UK 11', 'UK 12', 'EU 39', 'EU 40', 'EU 41', 'EU 42', 'EU 43', 'EU 44'],
+    placeholder: 'e.g. UK 7, UK 8, UK 9'
+  },
+  liquid: {
+    label: 'Liquid / Volume (mL / L)',
+    unitName: 'Volume',
+    presets: ['50mL', '100mL', '200mL', '250mL', '500mL', '750mL', '1L', '2L', '5L'],
+    placeholder: 'e.g. 100mL, 250mL, 500mL, 1L'
+  },
+  weight: {
+    label: 'Weight / Quantity (g / kg)',
+    unitName: 'Weight',
+    presets: ['50g', '100g', '250g', '500g', '1kg', '2kg', '5kg', '10kg'],
+    placeholder: 'e.g. 250g, 500g, 1kg'
+  },
+  pack: {
+    label: 'Pack / Count (Pcs)',
+    unitName: 'Pack Size',
+    presets: ['Pack of 1', 'Pack of 2', 'Pack of 3', 'Pack of 4', 'Pack of 5', 'Pack of 6', 'Pack of 10'],
+    placeholder: 'e.g. Pack of 2, Pack of 5'
+  },
+  storage: {
+    label: 'Electronics / Storage',
+    unitName: 'Capacity',
+    presets: ['32GB', '64GB', '128GB', '256GB', '512GB', '1TB'],
+    placeholder: 'e.g. 64GB, 128GB, 256GB'
+  },
+  custom: {
+    label: 'Custom Size / Measurement',
+    unitName: 'Option',
+    presets: [],
+    placeholder: 'e.g. Standard, Compact, Queen, King, 100cm'
+  }
+};
+
 export default function SellerPanel() {
   const { isLoggedIn, user, updateProfile } = useAuth();
   
@@ -29,9 +85,8 @@ export default function SellerPanel() {
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'add-product'
+  const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'inventory', 'payments', 'tickets', 'add-product', 'profile'
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
 
   // Onboarding Form State
   const [businessName, setBusinessName] = useState('');
@@ -85,8 +140,28 @@ export default function SellerPanel() {
 
   // Variants State
   const [selectedColors, setSelectedColors] = useState([]);
+  const [variantDimensionType, setVariantDimensionType] = useState('clothing');
+  const [selectedPresetSizes, setSelectedPresetSizes] = useState([]);
   const [sizesInput, setSizesInput] = useState('');
   const [variantsMatrix, setVariantsMatrix] = useState([]);
+
+  // Inventory Management State
+  const [inventory, setInventory] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryFilterStatus, setInventoryFilterStatus] = useState('all');
+  const [restockProduct, setRestockProduct] = useState(null);
+  const [restockStockValue, setRestockStockValue] = useState(0);
+  const [restockVariants, setRestockVariants] = useState([]);
+  const [restockSubmitting, setRestockSubmitting] = useState(false);
+
+  // Support Tickets State
+  const [myTickets, setMyTickets] = useState([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketCategory, setTicketCategory] = useState('payments_payouts');
+  const [ticketSubject, setTicketSubject] = useState('');
+  const [ticketDescription, setTicketDescription] = useState('');
+  const [ticketSubmitting, setTicketSubmitting] = useState(false);
 
   // Shiprocket 2-Step Dispatch Modal State
   const [shipModalOrder, setShipModalOrder] = useState(null);
@@ -112,10 +187,12 @@ export default function SellerPanel() {
     if (isLoggedIn) {
       fetchSellerData();
       fetchCategories();
+      if (activeTab === 'inventory') fetchInventory();
+      if (activeTab === 'tickets') fetchMyTickets();
     } else {
       setLoading(false);
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, activeTab]);
 
   const fetchCategories = async () => {
     try {
@@ -123,6 +200,32 @@ export default function SellerPanel() {
       setCategories(res.data.categories || []);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchInventory = async () => {
+    setInventoryLoading(true);
+    try {
+      const res = await api.get('/seller/inventory');
+      setInventory(res.data.inventory || []);
+    } catch (err) {
+      console.error('Error fetching inventory:', err);
+      toast.error('Failed to load inventory dataset');
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  const fetchMyTickets = async () => {
+    setTicketsLoading(true);
+    try {
+      const res = await api.get('/tickets/my');
+      setMyTickets(res.data.tickets || []);
+    } catch (err) {
+      console.error('Error fetching tickets:', err);
+      toast.error('Failed to load support tickets');
+    } finally {
+      setTicketsLoading(false);
     }
   };
 
@@ -346,6 +449,118 @@ export default function SellerPanel() {
     setVariantsMatrix(updated);
   };
 
+  const handleDimensionTypeChange = (type) => {
+    setVariantDimensionType(type);
+    setSelectedPresetSizes([]);
+    setSizesInput('');
+    regenerateVariants(selectedColors, '');
+  };
+
+  const handleTogglePresetSize = (preset) => {
+    let nextPresets;
+    if (selectedPresetSizes.includes(preset)) {
+      nextPresets = selectedPresetSizes.filter(p => p !== preset);
+    } else {
+      nextPresets = [...selectedPresetSizes, preset];
+    }
+    setSelectedPresetSizes(nextPresets);
+
+    // Merge preset selections with custom typed values
+    const currentCustom = sizesInput.split(',').map(s => s.trim()).filter(s => !VARIANT_DIMENSION_PRESETS[variantDimensionType]?.presets.includes(s) && Boolean(s));
+    const mergedSizes = [...nextPresets, ...currentCustom].join(', ');
+    setSizesInput(mergedSizes);
+    regenerateVariants(selectedColors, mergedSizes);
+  };
+
+  const handleOpenRestockModal = (product) => {
+    setRestockProduct(product);
+    setRestockStockValue(product.stock || 0);
+    setRestockVariants(Array.isArray(product.variants) ? product.variants.map(v => ({ ...v })) : []);
+  };
+
+  const handleSaveRestock = async () => {
+    if (!restockProduct) return;
+    setRestockSubmitting(true);
+    try {
+      await api.patch(`/seller/products/${restockProduct.id}/stock`, {
+        stock: parseInt(restockStockValue) || 0,
+        variants: restockVariants
+      });
+      toast.success('Inventory stock updated successfully!');
+      setRestockProduct(null);
+      fetchInventory();
+      fetchSellerData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update stock');
+    } finally {
+      setRestockSubmitting(false);
+    }
+  };
+
+  const handleCreateTicket = async (e) => {
+    e.preventDefault();
+    if (!ticketSubject.trim()) return toast.error('Ticket subject is required');
+    if (!ticketDescription.trim()) return toast.error('Ticket description is required');
+
+    setTicketSubmitting(true);
+    try {
+      await api.post('/tickets', {
+        category: ticketCategory,
+        subject: ticketSubject.trim(),
+        description: ticketDescription.trim()
+      });
+      toast.success('Support ticket created! Our operations team will assist you soon.');
+      setTicketSubject('');
+      setTicketDescription('');
+      fetchMyTickets();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to create support ticket');
+    } finally {
+      setTicketSubmitting(false);
+    }
+  };
+
+  const exportEarningsCSV = () => {
+    if (!orders || orders.length === 0) {
+      return toast.error('No orders available to export');
+    }
+
+    const headers = ['Order ID', 'Date', 'Product Name', 'Variant', 'Buyer Name', 'Delivery Pincode', 'Payment Mode', 'Gross Amount (INR)', 'Commission %', 'Commission Deducted (INR)', 'Net Seller Earnings (INR)', 'Order Status', 'Shipment Status', 'AWB Code'];
+
+    const rows = orders.map(o => {
+      const commAmt = ((parseFloat(o.total_amount) * parseFloat(o.commission_pct || 5)) / 100).toFixed(2);
+      const netAmt = (parseFloat(o.total_amount) - parseFloat(commAmt)).toFixed(2);
+      const variantDesc = [o.color, o.size].filter(Boolean).join(' / ') || 'Standard';
+
+      return [
+        `#ORD-${o.id}`,
+        new Date(o.created_at).toISOString().split('T')[0],
+        `"${(o.product_name || '').replace(/"/g, '""')}"`,
+        `"${variantDesc}"`,
+        `"${(o.buyer_name || '').replace(/"/g, '""')}"`,
+        o.delivery_pincode || '',
+        o.is_cod ? 'Cash on Delivery' : 'Online Prepaid',
+        parseFloat(o.total_amount).toFixed(2),
+        `${o.commission_pct || 5}%`,
+        commAmt,
+        netAmt,
+        o.status,
+        o.shipment_status || 'pending',
+        o.awb_code || ''
+      ];
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `slabofy_merchant_earnings_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Earnings ledger exported to CSV!');
+  };
+
   // ==========================================
   // SHIPROCKET 2-STEP DISPATCH HANDLERS
   // ==========================================
@@ -536,11 +751,23 @@ export default function SellerPanel() {
   const renderTabTitle = () => {
     switch (activeTab) {
       case 'orders': return 'Shipment Orders';
+      case 'inventory': return 'Inventory & Stock Management';
+      case 'payments': return 'Payments & Earnings Ledger';
+      case 'tickets': return 'Seller Support Helpdesk';
       case 'add-product': return 'Add New Product';
       case 'profile': return 'Profile Settings';
       default: return 'Merchant Center';
     }
   };
+
+  const SELLER_NAV_ITEMS = [
+    { tab: 'orders', icon: ShoppingCart, label: 'Shipment Orders' },
+    { tab: 'inventory', icon: Package, label: 'Inventory & Stock' },
+    { tab: 'payments', icon: TrendingUp, label: 'Payments & Payouts' },
+    { tab: 'tickets', icon: LifeBuoy, label: 'Support Helpdesk' },
+    { tab: 'add-product', icon: PlusCircle, label: 'Add New Product' },
+    { tab: 'profile', icon: User, label: 'Profile Settings' },
+  ];
 
   // CASE 3: Active Seller Panel
   return (
@@ -588,11 +815,7 @@ export default function SellerPanel() {
 
             <div className="flex-1 p-3 space-y-0.5 overflow-y-auto">
               <div className="text-[9px] font-black uppercase text-[#c4c0d8] tracking-[0.15em] px-3 py-3">Merchant Tools</div>
-              {[
-                { tab: 'orders', icon: ShoppingCart, label: 'Shipment Orders' },
-                { tab: 'add-product', icon: PlusCircle, label: 'Add New Product' },
-                { tab: 'profile', icon: User, label: 'Profile Settings' },
-              ].map((item, i) => (
+              {SELLER_NAV_ITEMS.map((item, i) => (
                 <button
                   key={item.tab}
                   onClick={() => { setActiveTab(item.tab); setSidebarOpen(false); }}
@@ -654,11 +877,7 @@ export default function SellerPanel() {
 
           <div className="flex-1 p-3 space-y-0.5 overflow-y-auto relative z-10">
             <div className="text-[9px] font-black uppercase text-[#c4c0d8] tracking-[0.15em] px-3 py-3">Merchant Tools</div>
-            {[
-              { tab: 'orders', icon: ShoppingCart, label: 'Shipment Orders' },
-              { tab: 'add-product', icon: PlusCircle, label: 'Add New Product' },
-              { tab: 'profile', icon: User, label: 'Profile Settings' },
-            ].map((item, i) => (
+            {SELLER_NAV_ITEMS.map((item, i) => (
               <button
                 key={item.tab}
                 onClick={() => setActiveTab(item.tab)}
@@ -884,6 +1103,573 @@ export default function SellerPanel() {
         </div>
       )}
 
+      {/* TAB: INVENTORY MANAGEMENT */}
+      {activeTab === 'inventory' && (
+        <div key={activeTab} className="space-y-6 animate-tab-morph">
+          {/* Header & Controls */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Inventory & Stock Control</h2>
+              <p className="text-xs text-[#6b6560] mt-0.5">Track live stock levels, total order fulfillment, remaining warehouse units, and restock products.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={fetchInventory}
+                className="p-2.5 rounded-xl bg-white border border-gray-200 hover:border-[#5b21b6] text-[#5b21b6] shadow-sm transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+              >
+                <RefreshCw size={14} className={inventoryLoading ? 'animate-spin' : ''} /> Refresh
+              </button>
+              <button
+                onClick={() => setActiveTab('add-product')}
+                className="bg-[#5b21b6] text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md shadow-violet-500/20 hover:bg-[#4338ca] transition-all cursor-pointer"
+              >
+                <Plus size={14} /> Add Product
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-[#9490b8] uppercase block mb-1">Total Listings</span>
+              <strong className="text-xl font-display font-black text-[#12100e]">{inventory.length}</strong>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-[#9490b8] uppercase block mb-1">Active in Catalog</span>
+              <strong className="text-xl font-display font-black text-[#059669]">
+                {inventory.filter(p => p.status === 'active').length}
+              </strong>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-[#9490b8] uppercase block mb-1">Total Units Sold</span>
+              <strong className="text-xl font-display font-black text-[#5b21b6]">
+                {inventory.reduce((acc, p) => acc + (parseInt(p.units_ordered) || 0), 0)}
+              </strong>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-[#9490b8] uppercase block mb-1">Warehouse Stock Units</span>
+              <strong className="text-xl font-display font-black text-[#f59e0b]">
+                {inventory.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0)}
+              </strong>
+            </div>
+          </div>
+
+          {/* Filters & Search */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { id: 'all', label: 'All Products' },
+                { id: 'active', label: 'Active Catalog' },
+                { id: 'pending', label: 'Pending Review' },
+                { id: 'rejected', label: 'Rejected' },
+                { id: 'low_stock', label: 'Low Stock (≤10)' },
+                { id: 'out_of_stock', label: 'Out of Stock' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setInventoryFilterStatus(f.id)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                    inventoryFilterStatus === f.id
+                      ? 'bg-[#5b21b6] text-white shadow-sm'
+                      : 'bg-gray-100 text-[#6b6560] hover:bg-gray-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search name or SKU..."
+                value={inventorySearch}
+                onChange={(e) => setInventorySearch(e.target.value)}
+                className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+              />
+            </div>
+          </div>
+
+          {/* Inventory Table */}
+          {inventoryLoading ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-gray-200 shadow-sm">
+              <RefreshCw className="animate-spin text-[#5b21b6] mx-auto mb-2" size={28} />
+              <p className="text-xs text-[#6b6560]">Loading warehouse inventory...</p>
+            </div>
+          ) : (
+            (() => {
+              const filtered = inventory.filter(p => {
+                // Status / Stock filter
+                if (inventoryFilterStatus === 'active' && p.status !== 'active') return false;
+                if (inventoryFilterStatus === 'pending' && p.status !== 'pending') return false;
+                if (inventoryFilterStatus === 'rejected' && p.status !== 'rejected') return false;
+                if (inventoryFilterStatus === 'low_stock' && (p.stock > 10 || p.stock <= 0)) return false;
+                if (inventoryFilterStatus === 'out_of_stock' && p.stock > 0) return false;
+
+                // Search query
+                if (inventorySearch.trim()) {
+                  const q = inventorySearch.toLowerCase();
+                  const matchName = (p.name || '').toLowerCase().includes(q);
+                  const matchSku = (p.sku || '').toLowerCase().includes(q);
+                  const matchCat = (p.category_name || '').toLowerCase().includes(q);
+                  if (!matchName && !matchSku && !matchCat) return false;
+                }
+                return true;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="bg-white border border-gray-200 rounded-3xl p-12 text-center shadow-sm">
+                    <Package size={44} className="mx-auto text-[#5b21b6] mb-3 opacity-40" />
+                    <h3 className="text-base font-bold text-[#12100e]">No Inventory Products Found</h3>
+                    <p className="text-xs text-[#6b6560] mt-1 mb-4">No products match your current search or filter criteria.</p>
+                    <button
+                      onClick={() => { setInventoryFilterStatus('all'); setInventorySearch(''); }}
+                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-xs font-bold rounded-xl text-[#12100e]"
+                    >
+                      Clear Filters
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-[#faf8f4]">
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Product Info</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Category & SKU</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Pricing Tiers</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Units Ordered</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Stock Available</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Status</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560] text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(p => {
+                          let images = [];
+                          try { images = typeof p.images === 'string' ? JSON.parse(p.images) : (p.images || []); } catch { images = []; }
+                          const thumb = images[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&auto=format&fit=crop&q=70';
+
+                          const isOutOfStock = p.stock <= 0;
+                          const isLowStock = p.stock > 0 && p.stock <= 10;
+                          const variantsList = Array.isArray(p.variants) ? p.variants : [];
+
+                          return (
+                            <tr key={p.id} className="border-b border-gray-100 last:border-none hover:bg-gray-50/80 transition-colors">
+                              <td className="py-4 px-5">
+                                <div className="flex items-center gap-3">
+                                  <img src={thumb} alt="" className="w-12 h-12 rounded-xl object-cover bg-gray-100 flex-shrink-0 border border-gray-200" />
+                                  <div>
+                                    <h4 className="text-xs font-bold text-[#12100e] line-clamp-1">{p.name}</h4>
+                                    <span className="text-[10px] text-[#9490b8] block mt-0.5">
+                                      Pkg: {p.weight_kg || 0.5}kg • {p.length_cm || 10}x{p.breadth_cm || 10}x{p.height_cm || 5}cm
+                                    </span>
+                                    {variantsList.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {variantsList.slice(0, 3).map((v, vi) => (
+                                          <span key={vi} className="text-[9px] font-semibold bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">
+                                            {[v.color, v.size].filter(Boolean).join(' / ')}: {v.stock}
+                                          </span>
+                                        ))}
+                                        {variantsList.length > 3 && (
+                                          <span className="text-[9px] text-[#5b21b6] font-bold">+{variantsList.length - 3} more</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-4 px-5">
+                                <span className="text-xs font-semibold text-[#12100e] block">{p.category_name || 'General'}</span>
+                                <span className="text-[10px] font-mono text-[#9490b8] block">{p.sku || 'NO-SKU'}</span>
+                              </td>
+                              <td className="py-4 px-5">
+                                {Array.isArray(p.tiers) && p.tiers.length > 0 ? (
+                                  <div className="space-y-0.5">
+                                    <span className="text-xs font-bold text-[#5b21b6] block">
+                                      {formatCurrency(p.tiers[0]?.price || 0)} (Solo)
+                                    </span>
+                                    {p.tiers.length > 1 && (
+                                      <span className="text-[10px] text-[#059669] font-bold block">
+                                        Team: {formatCurrency(p.tiers[p.tiers.length - 1]?.price || 0)}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-400 italic">No tiers</span>
+                                )}
+                              </td>
+                              <td className="py-4 px-5">
+                                <span className="text-xs font-black text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-lg">
+                                  {p.units_ordered || 0} units
+                                </span>
+                              </td>
+                              <td className="py-4 px-5">
+                                {isOutOfStock ? (
+                                  <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-200 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-600" /> Out of Stock (0)
+                                  </span>
+                                ) : isLowStock ? (
+                                  <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600" /> Low Stock ({p.stock})
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" /> {p.stock} In Stock
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-4 px-5">
+                                {p.status === 'active' ? (
+                                  <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-black uppercase">
+                                    Active
+                                  </span>
+                                ) : p.status === 'pending' ? (
+                                  <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-black uppercase">
+                                    Pending Review
+                                  </span>
+                                ) : (
+                                  <div>
+                                    <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-black uppercase block">
+                                      Rejected
+                                    </span>
+                                    {p.reject_reason && (
+                                      <span className="text-[9px] text-red-500 line-clamp-1 mt-0.5" title={p.reject_reason}>
+                                        {p.reject_reason}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-4 px-5 text-right">
+                                <button
+                                  onClick={() => handleOpenRestockModal(p)}
+                                  className="bg-gray-100 hover:bg-[#5b21b6] hover:text-white text-gray-800 text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5"
+                                >
+                                  <Edit3 size={12} /> Restock
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()
+          )}
+        </div>
+      )}
+
+      {/* TAB: PAYMENTS & FINANCIALS */}
+      {activeTab === 'payments' && (
+        <div key={activeTab} className="space-y-6 animate-tab-morph">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Merchant Payments & Payouts</h2>
+              <p className="text-xs text-[#6b6560] mt-0.5">Real-time revenue accounting, platform commission deductions, and per-order financial ledger.</p>
+            </div>
+            <button
+              onClick={exportEarningsCSV}
+              className="bg-[#059669] text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 hover:bg-[#047857] transition-all cursor-pointer"
+            >
+              <Download size={14} /> Export CSV Ledger
+            </button>
+          </div>
+
+          {/* Earnings KPI Cards */}
+          {(() => {
+            const grossSales = orders.reduce((acc, o) => acc + (o.status !== 'cancelled' ? parseFloat(o.total_amount || 0) : 0), 0);
+            const totalCommission = orders.reduce((acc, o) => acc + (o.status !== 'cancelled' ? ((parseFloat(o.total_amount || 0) * parseFloat(o.commission_pct || 5)) / 100) : 0), 0);
+            const netEarnings = grossSales - totalCommission;
+            const deliveredPayout = orders.filter(o => o.status === 'delivered' || o.shipment_status === 'delivered').reduce((acc, o) => acc + (parseFloat(o.total_amount || 0) * (1 - (parseFloat(o.commission_pct || 5) / 100))), 0);
+            const escrowPending = netEarnings - deliveredPayout;
+
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-[#9490b8] font-bold uppercase mb-2">
+                    <span>Gross Marketplace Sales</span>
+                    <ShoppingCart size={16} className="text-[#5b21b6]" />
+                  </div>
+                  <strong className="text-2xl font-display font-black text-[#12100e] block">{formatCurrency(grossSales)}</strong>
+                  <span className="text-[10px] text-[#6b6560] mt-1 block">From {orders.filter(o => o.status !== 'cancelled').length} successful orders</span>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-[#9490b8] font-bold uppercase mb-2">
+                    <span>Platform Commission</span>
+                    <Tag size={16} className="text-[#f05035]" />
+                  </div>
+                  <strong className="text-2xl font-display font-black text-[#f05035] block">{formatCurrency(totalCommission)}</strong>
+                  <span className="text-[10px] text-[#6b6560] mt-1 block">Auto-deducted marketplace service fee</span>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm bg-gradient-to-br from-[rgba(5,150,105,0.04)] to-transparent">
+                  <div className="flex items-center justify-between text-xs text-[#059669] font-bold uppercase mb-2">
+                    <span>Net Seller Earnings</span>
+                    <TrendingUp size={16} className="text-[#059669]" />
+                  </div>
+                  <strong className="text-2xl font-display font-black text-[#059669] block">{formatCurrency(netEarnings)}</strong>
+                  <span className="text-[10px] text-[#6b6560] mt-1 block">Net payout after platform commission</span>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-[#9490b8] font-bold uppercase mb-2">
+                    <span>Delivered (Payout Ready)</span>
+                    <CheckCircle2 size={16} className="text-[#4338ca]" />
+                  </div>
+                  <strong className="text-2xl font-display font-black text-[#4338ca] block">{formatCurrency(deliveredPayout)}</strong>
+                  <span className="text-[10px] text-[#6b6560] mt-1 block">Escrow hold: {formatCurrency(Math.max(0, escrowPending))}</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Orders Financial Ledger Table */}
+          <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#12100e] uppercase">Order Earnings & Payout Breakdown</h3>
+              <span className="text-xs text-[#9490b8] font-semibold">{orders.length} Total Orders</span>
+            </div>
+
+            {orders.length === 0 ? (
+              <div className="p-12 text-center">
+                <DollarSign size={40} className="mx-auto text-gray-300 mb-2" />
+                <h4 className="text-sm font-bold text-[#12100e]">No Sales History Yet</h4>
+                <p className="text-xs text-[#6b6560] mt-1">When buyers purchase your products, the financial transaction details will appear here.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-[#faf8f4]">
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Order ID & Date</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Product / Variant</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Buyer & Mode</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Gross Price</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Commission Cut</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Your Net Payout</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Delivery Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map(ord => {
+                      const commCut = ((parseFloat(ord.total_amount) * parseFloat(ord.commission_pct || 5)) / 100);
+                      const netPayout = parseFloat(ord.total_amount) - commCut;
+                      const variantPill = [ord.color, ord.size].filter(Boolean).join(' / ');
+
+                      return (
+                        <tr key={ord.id} className="border-b border-gray-100 last:border-none hover:bg-gray-50/80 transition-colors">
+                          <td className="py-4 px-5">
+                            <span className="font-mono text-xs font-bold text-[#5b21b6] block">#ORD-{ord.id}</span>
+                            <span className="text-[10px] text-[#9490b8] block mt-0.5">
+                              {new Date(ord.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className="text-xs font-bold text-[#12100e] block line-clamp-1">{ord.product_name}</span>
+                            {variantPill && (
+                              <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                {variantPill}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className="text-xs font-semibold text-[#12100e] block">{ord.buyer_name}</span>
+                            <span className={`inline-flex items-center text-[9px] font-black uppercase px-2 py-0.5 rounded mt-0.5 ${
+                              ord.is_cod ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {ord.is_cod ? 'Cash on Delivery' : 'Prepaid Online'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <strong className="text-xs font-black text-[#12100e] block">{formatCurrency(ord.total_amount)}</strong>
+                            <span className="text-[10px] text-[#9490b8]">Qty: {ord.quantity}</span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className="text-xs font-bold text-[#f05035] block">-{formatCurrency(commCut)}</span>
+                            <span className="text-[10px] text-[#9490b8] block">Rate: {ord.commission_pct || 5}%</span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <strong className="text-sm font-black text-[#059669] block">+{formatCurrency(netPayout)}</strong>
+                            <span className="text-[9px] text-emerald-600 font-bold block">Credit Net</span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
+                              ord.shipment_status === 'delivered' ? 'bg-green-100 text-green-700' :
+                              ord.shipment_status === 'in_transit' ? 'bg-blue-100 text-blue-700' :
+                              ord.shipment_status === 'pickup_scheduled' ? 'bg-purple-100 text-purple-700' :
+                              ord.status === 'confirmed' ? 'bg-amber-100 text-amber-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {ord.shipment_status ? ord.shipment_status.replace('_', ' ') : ord.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: SUPPORT HELPDESK / RAISE TICKETS */}
+      {activeTab === 'tickets' && (
+        <div key={activeTab} className="space-y-6 animate-tab-morph max-w-5xl mx-auto">
+          <div>
+            <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Merchant Support Helpdesk</h2>
+            <p className="text-xs text-[#6b6560] mt-0.5">Need assistance with your catalog, orders, payouts, or Shiprocket logistics? Raise a ticket directly with our operations team.</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Form: Raise New Ticket */}
+            <div className="lg:col-span-1 bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-4 h-fit">
+              <h3 className="text-sm font-bold font-display text-[#12100e] flex items-center gap-2 border-b border-gray-100 pb-3">
+                <MessageSquare className="text-[#5b21b6]" size={18} />
+                Raise New Ticket
+              </h3>
+
+              <form onSubmit={handleCreateTicket} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#6b6560] uppercase">Issue Category</label>
+                  <select
+                    value={ticketCategory}
+                    onChange={(e) => setTicketCategory(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-[#12100e] font-semibold focus:outline-none focus:border-[#5b21b6]"
+                    required
+                  >
+                    <option value="payments_payouts">Payments & Payouts</option>
+                    <option value="order_issue">Order Issue / Dispute</option>
+                    <option value="product_listing">Product Listing & Approval</option>
+                    <option value="account_kyc">Account & KYC Verification</option>
+                    <option value="technical_bug">Technical Bug / App Issue</option>
+                    <option value="shiprocket_delivery">Shiprocket & Delivery Logistics</option>
+                    <option value="other">Other Inquiry</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#6b6560] uppercase">Subject</label>
+                  <input
+                    type="text"
+                    placeholder="Brief summary of your query..."
+                    value={ticketSubject}
+                    onChange={(e) => setTicketSubject(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#6b6560] uppercase">Detailed Description</label>
+                  <textarea
+                    rows={4}
+                    placeholder="Provide relevant details (order numbers, SKU, screenshots if applicable)..."
+                    value={ticketDescription}
+                    onChange={(e) => setTicketDescription(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={ticketSubmitting}
+                  className="w-full bg-[#5b21b6] hover:bg-[#4338ca] text-white font-bold py-3 rounded-xl text-xs transition-all shadow-md shadow-violet-500/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {ticketSubmitting ? <RefreshCw className="animate-spin" size={14} /> : <LifeBuoy size={14} />}
+                  {ticketSubmitting ? 'Submitting...' : 'Submit Support Ticket'}
+                </button>
+              </form>
+            </div>
+
+            {/* List: My Tickets History */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-[#12100e] uppercase">Your Support History</h3>
+                <span className="text-xs text-[#9490b8] font-semibold">{myTickets.length} Tickets</span>
+              </div>
+
+              {ticketsLoading ? (
+                <div className="bg-white rounded-3xl p-12 text-center border border-gray-200 shadow-sm">
+                  <RefreshCw className="animate-spin text-[#5b21b6] mx-auto mb-2" size={24} />
+                  <p className="text-xs text-[#6b6560]">Loading your tickets...</p>
+                </div>
+              ) : myTickets.length === 0 ? (
+                <div className="bg-white border border-gray-200 rounded-3xl p-12 text-center shadow-sm">
+                  <LifeBuoy size={40} className="mx-auto text-gray-300 mb-2" />
+                  <h4 className="text-sm font-bold text-[#12100e]">No Support Tickets Yet</h4>
+                  <p className="text-xs text-[#6b6560] mt-1">If you ever need help, use the form to reach our dedicated operations team.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {myTickets.map(t => {
+                    const categoryLabels = {
+                      payments_payouts: 'Payments & Payouts',
+                      order_issue: 'Order Issue',
+                      product_listing: 'Product Listing',
+                      account_kyc: 'Account & KYC',
+                      technical_bug: 'Technical Bug',
+                      shiprocket_delivery: 'Shiprocket & Delivery',
+                      other: 'Other'
+                    };
+
+                    return (
+                      <div key={t.id} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-[#5b21b6]">#TKT-{t.id}</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700">
+                              {categoryLabels[t.category] || t.category}
+                            </span>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            t.status === 'open' ? 'bg-amber-100 text-amber-700' :
+                            t.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {t.status.replace('_', ' ')}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-sm font-bold text-[#12100e] mb-1">{t.subject}</h4>
+                          <p className="text-xs text-[#4b4642] leading-relaxed whitespace-pre-wrap">{t.description}</p>
+                        </div>
+
+                        {t.admin_note && (
+                          <div className="bg-violet-50 border border-violet-100 rounded-xl p-3 text-xs text-[#5b21b6] space-y-1">
+                            <div className="font-bold uppercase text-[10px] flex items-center gap-1">
+                              <ShieldCheck size={12} /> Operations Team Response:
+                            </div>
+                            <p className="text-[#3b2d54] whitespace-pre-wrap">{t.admin_note}</p>
+                          </div>
+                        )}
+
+                        <div className="text-[10px] text-[#9490b8] pt-1 flex justify-between">
+                          <span>Created: {new Date(t.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                          {t.updated_at && <span>Last Updated: {new Date(t.updated_at).toLocaleDateString('en-IN')}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAB 2: ADD PRODUCT */}
       {activeTab === 'add-product' && (
         <div className="glass-panel border-[rgba(99,102,241,0.1)] rounded-3xl p-6 md:p-8 shadow-xl max-w-4xl mx-auto">
@@ -1099,97 +1885,170 @@ export default function SellerPanel() {
               </div>
             </div>
 
-            {/* Product Variants Section */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4 shadow-sm">
-              <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-                <Tag size={16} className="text-[#5b21b6]" />
-                <span className="text-xs font-bold text-[#12100e] uppercase">Product Variants (Optional)</span>
+            {/* Product Variants Section (Flexible Dimensions & Units) */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-5 shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Tag size={16} className="text-[#5b21b6]" />
+                  <span className="text-xs font-bold text-[#12100e] uppercase">Product Variants (Colors, Sizes & Units)</span>
+                </div>
+                {variantsMatrix.length > 0 && (
+                  <span className="text-[10px] font-bold text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-lg">
+                    {variantsMatrix.length} Variant Combinations Active
+                  </span>
+                )}
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3 md:col-span-2">
-                  <label className="text-xs text-[#9490b8] font-semibold uppercase">Colors</label>
+              <div className="space-y-4">
+                {/* 1. Colors Selector */}
+                <div className="space-y-2">
+                  <label className="text-xs text-[#9490b8] font-semibold uppercase flex items-center justify-between">
+                    <span>Available Colors (Optional)</span>
+                    {selectedColors.length > 0 && <span className="text-[#5b21b6] font-bold text-[11px]">{selectedColors.length} selected</span>}
+                  </label>
                   <div className="flex flex-wrap gap-2">
-                    {PREDEFINED_COLORS.map(color => (
-                      <button
-                        key={color.name}
-                        type="button"
-                        onClick={() => toggleColor(color.name)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${selectedColors.includes(color.name) ? 'border-[#5b21b6] bg-[rgba(91,33,182,0.1)] text-[#5b21b6]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
-                      >
-                        <span className="w-3 h-3 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: color.hex }}></span>
-                        {color.name}
-                      </button>
-                    ))}
+                    {PREDEFINED_COLORS.map(color => {
+                      const isSel = selectedColors.includes(color.name);
+                      return (
+                        <button
+                          key={color.name}
+                          type="button"
+                          onClick={() => handleColorToggle(color.name)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                            isSel 
+                              ? 'border-[#5b21b6] bg-[rgba(91,33,182,0.1)] text-[#5b21b6] font-bold shadow-sm' 
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          <span className="w-3 h-3 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: color.hex }} />
+                          {color.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs text-[#9490b8] font-semibold uppercase">Sizes (Comma separated)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. S, M, L, XL"
-                    value={sizesInput}
-                    onChange={(e) => setSizesInput(e.target.value)}
-                    className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-3 px-4 text-xs text-[#1e1b4b]"
-                  />
-                </div>
-              </div>
-              
-              <button
-                type="button"
-                onClick={handleGenerateVariants}
-                className="bg-[rgba(91,33,182,0.1)] text-[#5b21b6] font-bold text-xs py-2 px-4 rounded-xl border border-[rgba(91,33,182,0.2)] hover:bg-[rgba(91,33,182,0.15)] transition-colors"
-              >
-                Generate Variant Combinations
-              </button>
 
+                {/* 2. Variant Dimension Type & Presets */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#9490b8] font-semibold uppercase">Variant Measurement Type</label>
+                    <select
+                      value={variantDimensionType}
+                      onChange={(e) => handleDimensionTypeChange(e.target.value)}
+                      className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2.5 px-3.5 text-xs text-[#1e1b4b] font-semibold focus:outline-none focus:border-[#5b21b6]"
+                    >
+                      {Object.entries(VARIANT_DIMENSION_PRESETS).map(([key, config]) => (
+                        <option key={key} value={key}>{config.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-[#9490b8]">Select product type: clothing, waist inches, footwear, liquids (mL), weights (g/kg), etc.</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#9490b8] font-semibold uppercase">
+                      Custom Values / Input (Comma Separated)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={VARIANT_DIMENSION_PRESETS[variantDimensionType]?.placeholder || "e.g. S, M, L or 500mL, 1L"}
+                      value={sizesInput}
+                      onChange={handleSizesChange}
+                      className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2.5 px-3.5 text-xs text-[#1e1b4b] placeholder-gray-400 focus:outline-none focus:border-[#5b21b6]"
+                    />
+                    <p className="text-[10px] text-[#9490b8]">You can click presets below or type custom sizes/volumes manually.</p>
+                  </div>
+                </div>
+
+                {/* Quick Preset Buttons */}
+                {VARIANT_DIMENSION_PRESETS[variantDimensionType]?.presets.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] font-bold text-[#6b6560] block uppercase tracking-wider">Quick Preset Chips:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {VARIANT_DIMENSION_PRESETS[variantDimensionType].presets.map(p => {
+                        const isSel = selectedPresetSizes.includes(p);
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => handleTogglePresetSize(p)}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              isSel
+                                ? 'bg-[#5b21b6] text-white shadow-sm'
+                                : 'bg-[#faf8f4] text-[#6b6560] border border-gray-200 hover:border-[#5b21b6] hover:text-[#5b21b6]'
+                            }`}
+                          >
+                            {isSel ? `✓ ${p}` : `+ ${p}`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Variant Matrix Table */}
               {variantsMatrix.length > 0 && (
-                <div className="mt-4">
-                  <table className="w-full text-left border-collapse">
+                <div className="mt-4 pt-3 border-t border-gray-100 overflow-x-auto">
+                  <div className="text-xs font-bold text-[#12100e] mb-2 uppercase">Configured Variant Matrix</div>
+                  <table className="w-full text-left border-collapse min-w-[500px]">
                     <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="py-2 text-xs font-bold text-[#6b6560]">Color</th>
-                        <th className="py-2 text-xs font-bold text-[#6b6560]">Size</th>
-                        <th className="py-2 text-xs font-bold text-[#6b6560]">Stock Quantity</th>
-                        <th className="py-2 text-xs font-bold text-[#6b6560]">Variant Image</th>
+                      <tr className="border-b border-gray-200 bg-[#faf8f4]">
+                        <th className="py-2.5 px-3 text-xs font-bold text-[#6b6560]">Color</th>
+                        <th className="py-2.5 px-3 text-xs font-bold text-[#6b6560]">Size / Volume</th>
+                        <th className="py-2.5 px-3 text-xs font-bold text-[#6b6560]">Stock Available</th>
+                        <th className="py-2.5 px-3 text-xs font-bold text-[#6b6560]">Variant Image</th>
                       </tr>
                     </thead>
                     <tbody>
                       {variantsMatrix.map((variant, idx) => (
-                        <tr key={idx} className="border-b border-gray-50 last:border-none">
-                          <td className="py-3 text-xs text-[#12100e] font-semibold">
+                        <tr key={idx} className="border-b border-gray-50 last:border-none hover:bg-gray-50">
+                          <td className="py-3 px-3 text-xs text-[#12100e] font-semibold">
                             <span className="flex items-center gap-1.5">
                               {PREDEFINED_COLORS.find(c => c.name === variant.color) && (
                                 <span className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: PREDEFINED_COLORS.find(c => c.name === variant.color).hex }}></span>
                               )}
-                              {variant.color}
+                              {variant.color || <span className="text-gray-400 italic">Default</span>}
                             </span>
                           </td>
-                          <td className="py-3 text-xs text-[#12100e] font-semibold">{variant.size}</td>
-                          <td className="py-3">
+                          <td className="py-3 px-3 text-xs text-[#12100e] font-bold">
+                            <span className="bg-gray-100 px-2 py-0.5 rounded text-[11px] text-[#12100e]">
+                              {variant.size || <span className="text-gray-400 italic">Standard</span>}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
                             <input
                               type="number"
                               min="0"
                               value={variant.stock}
                               onChange={(e) => handleVariantStockChange(idx, e.target.value)}
-                              className="w-24 bg-[#faf8f4] border border-gray-200 rounded-lg py-1.5 px-3 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                              className="w-24 bg-[#faf8f4] border border-gray-200 rounded-lg py-1.5 px-3 text-xs text-[#12100e] font-bold focus:outline-none focus:border-[#5b21b6]"
                             />
                           </td>
-                          <td className="py-3">
+                          <td className="py-3 px-3">
                             {variant.image_url ? (
-                              <div className="relative w-10 h-10 rounded overflow-hidden group">
+                              <div className="relative w-10 h-10 rounded-lg overflow-hidden group">
                                 <img src={variant.image_url} className="w-full h-full object-cover" />
                                 <button type="button" onClick={() => {
                                   const updated = [...variantsMatrix];
                                   updated[idx].image_url = null;
                                   setVariantsMatrix(updated);
-                                }} className="absolute inset-0 bg-black/50 text-white text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100">Clear</button>
+                                }} className="absolute inset-0 bg-black/60 text-white text-[9px] flex items-center justify-center opacity-0 group-hover:opacity-100 font-bold">Remove</button>
                               </div>
                             ) : (
                               <div>
-                                <input type="file" accept="image/*" id={`var-img-${idx}`} className="hidden" onChange={(e) => handleVariantImageUpload(idx, e)} />
-                                <label htmlFor={`var-img-${idx}`} className="cursor-pointer text-[10px] bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200 hover:bg-gray-200">
-                                  Upload
+                                <input type="file" accept="image/*" id={`var-img-${idx}`} className="hidden" onChange={(e) => {
+                                  const file = e.target.files[0];
+                                  if (!file) return;
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    const updated = [...variantsMatrix];
+                                    updated[idx].image_url = reader.result;
+                                    setVariantsMatrix(updated);
+                                  };
+                                  reader.readAsDataURL(file);
+                                }} />
+                                <label htmlFor={`var-img-${idx}`} className="cursor-pointer text-[10px] font-bold bg-white text-[#5b21b6] px-2.5 py-1 rounded-lg border border-[#5b21b6]/20 hover:bg-[#5b21b6]/10 inline-flex items-center gap-1">
+                                  <UploadCloud size={10} /> Photo
                                 </label>
                               </div>
                             )}
@@ -1720,6 +2579,91 @@ export default function SellerPanel() {
         </div>
       )}
 
+      {/* RESTOCK & INVENTORY UPDATE MODAL */}
+      {restockProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 md:p-8 space-y-6 relative border border-gray-200 shadow-2xl">
+            <button 
+              onClick={() => setRestockProduct(null)} 
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <X size={20}/>
+            </button>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-full">
+                Warehouse Restock
+              </span>
+              <h3 className="text-xl font-bold font-display text-[#1e1b4b] mt-2">
+                Restock Inventory
+              </h3>
+              <p className="text-xs text-[#6b6560] line-clamp-1 mt-0.5 font-semibold">
+                {restockProduct.name} ({restockProduct.sku || 'SKU N/A'})
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#12100e] uppercase">Total Master Stock Quantity</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={restockStockValue}
+                  onChange={(e) => setRestockStockValue(e.target.value)}
+                  className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                />
+                <p className="text-[10px] text-[#9490b8]">This represents total available warehouse stock for solo/group deals.</p>
+              </div>
+
+              {restockVariants && restockVariants.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <label className="text-xs font-bold text-[#12100e] uppercase block">Variant Stock Allocations</label>
+                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                    {restockVariants.map((v, vi) => (
+                      <div key={vi} className="flex items-center justify-between p-2.5 bg-[#faf8f4] border border-gray-100 rounded-xl">
+                        <span className="text-xs font-semibold text-[#12100e]">
+                          {[v.color, v.size].filter(Boolean).join(' / ') || 'Standard Variant'}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={v.stock}
+                          onChange={(e) => {
+                            const updated = [...restockVariants];
+                            updated[vi] = { ...updated[vi], stock: parseInt(e.target.value) || 0 };
+                            setRestockVariants(updated);
+                          }}
+                          className="w-20 bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-bold text-center text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRestockProduct(null)}
+                className="flex-1 bg-gray-100 text-gray-700 font-bold rounded-xl py-3 text-xs hover:bg-gray-200 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveRestock}
+                disabled={restockSubmitting}
+                className="flex-1 bg-[#5b21b6] text-white font-bold rounded-xl py-3 text-xs flex items-center justify-center gap-2 hover:bg-[#4338ca] disabled:opacity-50 cursor-pointer shadow-md shadow-violet-500/20"
+              >
+                {restockSubmitting ? <RefreshCw className="animate-spin" size={14} /> : <Check size={14} />}
+                {restockSubmitting ? 'Saving Stock...' : 'Save Stock Levels'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
           </div>
         </div>
         </div>
@@ -1727,6 +2671,9 @@ export default function SellerPanel() {
         <div className="mobile-bottom-nav lg:hidden">
           {[
             { tab: 'orders', icon: ShoppingCart, label: 'Orders' },
+            { tab: 'inventory', icon: Package, label: 'Stock' },
+            { tab: 'payments', icon: TrendingUp, label: 'Payouts' },
+            { tab: 'tickets', icon: LifeBuoy, label: 'Help' },
             { tab: 'add-product', icon: PlusCircle, label: 'Add' },
             { tab: 'profile', icon: User, label: 'Profile' },
           ].map((item) => (
@@ -1735,8 +2682,8 @@ export default function SellerPanel() {
               onClick={() => setActiveTab(item.tab)}
               className={`mobile-nav-btn ${activeTab === item.tab ? 'active' : ''}`}
             >
-              <item.icon size={20} />
-              <span>{item.label}</span>
+              <item.icon size={18} />
+              <span className="text-[9px]">{item.label}</span>
               <div className="mobile-nav-dot" />
             </button>
           ))}

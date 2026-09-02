@@ -125,10 +125,13 @@ export default function ProductDetail() {
 
   const displayImage = (currentVariant && currentVariant.image_url) ? currentVariant.image_url : images[selectedImage];
 
-  const soloTier = product.tiers?.find(t => t.group_size === 1);
-  const soloPrice = soloTier ? parseFloat(soloTier.price) : 0;
-  const groupTiers = product.tiers?.filter(t => t.group_size > 1) || [];
-  const bestTier = groupTiers.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b, groupTiers[0]);
+  const tiers = Array.isArray(product.tiers) ? product.tiers : [];
+  const soloTier = tiers.find(t => t.group_size === 1);
+  const soloPrice = soloTier ? parseFloat(soloTier.price) : (tiers[0] ? parseFloat(tiers[0].price) : 0);
+  const groupTiers = tiers.filter(t => t.group_size > 1);
+  const bestTier = groupTiers.length > 0 
+    ? groupTiers.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b, groupTiers[0]) 
+    : null;
 
   return (
     <div style={{ background: '#faf8f4', minHeight: '100vh' }}>
@@ -159,7 +162,7 @@ export default function ProductDetail() {
             }}>
               <div className="tilt-card-inner" style={{ width: '100%', height: '100%' }}>
                 <img
-                  src={images[selectedImage]} alt={product.name}
+                  src={displayImage || images[selectedImage]} alt={product.name}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
                 <div className="glare" />
@@ -204,10 +207,90 @@ export default function ProductDetail() {
               }}>
                 {product.name}
               </h1>
-              <p style={{ fontSize: '0.9rem', color: '#6b6560', lineHeight: 1.8, marginBottom: 28, borderLeft: '3px solid rgba(91,33,182,0.2)', paddingLeft: 16 }}>
+              <p style={{ fontSize: '0.9rem', color: '#6b6560', lineHeight: 1.8, marginBottom: 20, borderLeft: '3px solid rgba(91,33,182,0.2)', paddingLeft: 16 }}>
                 {product.description || 'No description available for this item.'}
               </p>
             </div>
+
+            {/* VARIANT SELECTORS (Color & Size / Unit) */}
+            {hasVariants && (
+              <div style={{ background: '#fff', borderRadius: 20, padding: 18, border: '1px solid rgba(18,16,14,0.08)', marginBottom: 24 }}>
+                {availableColors.length > 0 && (
+                  <div style={{ marginBottom: availableSizes.length > 0 ? 16 : 0 }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                      Select Color {selectedColor && <span style={{ color: '#5b21b6', fontWeight: 800 }}>({selectedColor})</span>}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {availableColors.map(c => {
+                        const isSel = selectedColor === c;
+                        const colObj = PREDEFINED_COLORS.find(pc => pc.name.toLowerCase() === c.toLowerCase());
+                        return (
+                          <button
+                            key={c}
+                            onClick={() => setSelectedColor(c)}
+                            style={{
+                              padding: '6px 14px', borderRadius: 12,
+                              border: isSel ? '2px solid #5b21b6' : '1px solid rgba(18,16,14,0.12)',
+                              background: isSel ? 'rgba(91,33,182,0.08)' : '#faf8f4',
+                              color: isSel ? '#5b21b6' : '#12100e',
+                              fontSize: '0.82rem', fontWeight: isSel ? 700 : 500,
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            {colObj && <span style={{ width: 10, height: 10, borderRadius: '50%', background: colObj.hex, border: '1px solid rgba(0,0,0,0.1)' }} />}
+                            {c}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {availableSizes.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                      Select Size / Option {selectedSize && <span style={{ color: '#5b21b6', fontWeight: 800 }}>({selectedSize})</span>}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {availableSizes.map(s => {
+                        const isSel = selectedSize === s;
+                        return (
+                          <button
+                            key={s}
+                            onClick={() => setSelectedSize(s)}
+                            style={{
+                              padding: '6px 16px', borderRadius: 12,
+                              border: isSel ? '2px solid #5b21b6' : '1px solid rgba(18,16,14,0.12)',
+                              background: isSel ? 'rgba(91,33,182,0.08)' : '#faf8f4',
+                              color: isSel ? '#5b21b6' : '#12100e',
+                              fontSize: '0.82rem', fontWeight: isSel ? 700 : 500,
+                              cursor: 'pointer', transition: 'all 0.15s'
+                            }}
+                          >
+                            {s}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Stock Indicator */}
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(18,16,14,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                  <span style={{ color: '#6b6560' }}>Availability:</span>
+                  {currentStock > 0 ? (
+                    <span style={{ color: '#059669', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#059669' }} /> In Stock ({currentStock} units left)
+                    </span>
+                  ) : (
+                    <span style={{ color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} /> Currently Out of Stock
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Price Tiers (Interactive) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>

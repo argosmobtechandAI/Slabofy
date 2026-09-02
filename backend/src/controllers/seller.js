@@ -226,3 +226,105 @@ export const getSellerProfile = async (req, res) => {
     return res.status(500).json({ error: 'Server error fetching seller profile' });
   }
 };
+
+/**
+ * FE/BE: Seller Inventory Management Overview
+ */
+export const getSellerInventory = async (req, res) => {
+  const sellerId = req.user.id;
+
+  try {
+    const query = `
+      SELECT p.*, c.name as category_name,
+             COALESCE((
+               SELECT SUM(o.quantity)::int 
+               FROM orders o 
+               WHERE o.product_id = p.id AND o.status NOT IN ('cancelled', 'refunded')
+             ), 0) as units_ordered,
+             COALESCE((
+               SELECT json_agg(json_build_object('id', pv.id, 'color', pv.color, 'size', pv.size, 'stock', pv.stock, 'image_url', pv.image_url))
+               FROM product_variants pv WHERE pv.product_id = p.id
+             ), '[]'::json) as variants,
+             COALESCE((
+               SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price) ORDER BY pt.group_size ASC)
+               FROM product_tiers pt WHERE pt.product_id = p.id
+             ), '[]'::json) as tiers
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.seller_id = $1
+      ORDER BY p.created_at DESC
+    `;
+    const result = await pool.query(query, [sellerId]);
+    return res.status(200).json({ inventory: result.rows });
+  } catch (error) {
+    console.error('Error in getSellerInventory:', error.message);
+    return res.status(500).json({ error: 'Server error loading inventory overview' });
+  }
+};
+
+/**
+ * FE/BE: Quick Update Stock
+ */
+export const updateProductStock = async (req, res) => {
+  const { id } = req.params;
+  const { stock, variants } = req.body;
+  const sellerId = req.user.id;
+
+  if (stock === undefined && (!variants || !Array.isArray(variants))) {
+    return res.status(400).json({ error: 'Stock quantity or variant stock updates are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Verify seller ownership
+    const prodCheck = await client.query(
+      'SELECT id, seller_id FROM products WHERE id = $1',
+      [id]
+    );
+    if (prodCheck.rowCount === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    if (prodCheck.rows[0].seller_id !== sellerId) {
+      return res.status(403).json({ error: 'Access Denied: Product does not belong to you' });
+    }
+
+    // 2. Update parent product stock if provided
+    let updatedProduct = null;
+    if (stock !== undefined) {
+      const parsedStock = Math.max(0, parseInt(stock) || 0);
+      const updateRes = await client.query(
+        'UPDATE products SET stock = $1 WHERE id = $2 RETURNING *',
+        [parsedStock, id]
+      );
+      updatedProduct = updateRes.rows[0];
+    }
+
+    // 3. Update variant stock if provided
+    if (variants && Array.isArray(variants)) {
+      for (const v of variants) {
+        if (v.id && v.stock !== undefined) {
+          await client.query(
+            'UPDATE product_variants SET stock = $1 WHERE id = $2 AND product_id = $3',
+            [Math.max(0, parseInt(v.stock) || 0), v.id, id]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      message: 'Stock updated successfully',
+      product: updatedProduct
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in updateProductStock:', error.message);
+    return res.status(500).json({ error: 'Server error updating stock' });
+  } finally {
+    client.release();
+  }
+};
+

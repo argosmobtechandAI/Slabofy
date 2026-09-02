@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { Link, Navigate } from 'react-router-dom';
 import { 
   ShieldAlert, BarChart3, FolderHeart, Users, ListFilter, Percent, 
-  Trash2, Check, X, RefreshCw, Plus, Calendar, AlertTriangle, ShieldCheck, Tag, Info, Package, Lock, Menu, TrendingUp, Clock, CheckCircle2
+  Trash2, Check, X, RefreshCw, Plus, Calendar, AlertTriangle, ShieldCheck, Tag, Info, Package, Lock, Menu, TrendingUp, Clock, CheckCircle2,
+  LifeBuoy, HelpCircle, MessageSquare, Phone, Mail, FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -14,7 +15,7 @@ export default function AdminPanel() {
   const { isLoggedIn, role } = useAuth();
 
   // Navigation state
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'categories', 'sellers', 'products', 'coupons', 'customers'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'categories', 'sellers', 'products', 'coupons', 'customers', 'tickets'
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
 
@@ -26,6 +27,11 @@ export default function AdminPanel() {
   const [coupons, setCoupons] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [ticketFilterStatus, setTicketFilterStatus] = useState('all');
+  const [ticketFilterCat, setTicketFilterCat] = useState('all');
+  const [ticketReplyNotes, setTicketReplyNotes] = useState({});
+  const [updatingTicketId, setUpdatingTicketId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Forms states
@@ -54,7 +60,7 @@ export default function AdminPanel() {
     } else {
       setLoading(false);
     }
-  }, [isLoggedIn, role, activeTab]);
+  }, [isLoggedIn, role, activeTab, ticketFilterStatus, ticketFilterCat]);
 
   const fetchAdminData = async () => {
     setLoading(true);
@@ -80,12 +86,35 @@ export default function AdminPanel() {
       } else if (activeTab === 'orders') {
         const ordRes = await api.get('/admin/orders');
         setOrders(ordRes.data.orders || []);
+      } else if (activeTab === 'tickets') {
+        let url = '/tickets/all?';
+        if (ticketFilterStatus !== 'all') url += `status=${ticketFilterStatus}&`;
+        if (ticketFilterCat !== 'all') url += `category=${ticketFilterCat}&`;
+        const tktRes = await api.get(url);
+        setTickets(tktRes.data.tickets || []);
       }
     } catch (err) {
       console.error(err);
       toast.error('Failed to load admin dataset');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateTicket = async (ticketId, newStatus) => {
+    setUpdatingTicketId(ticketId);
+    try {
+      const note = ticketReplyNotes[ticketId];
+      await api.put(`/tickets/${ticketId}`, {
+        status: newStatus,
+        admin_note: note
+      });
+      toast.success(`Ticket marked as ${newStatus.replace('_', ' ')}`);
+      fetchAdminData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update ticket status');
+    } finally {
+      setUpdatingTicketId(null);
     }
   };
 
@@ -249,6 +278,7 @@ export default function AdminPanel() {
       case 'coupons': return 'Escrow Coupons';
       case 'customers': return 'Customer Database';
       case 'orders': return 'Platform Orders';
+      case 'tickets': return 'Seller Support Tickets';
       case 'security': return 'Security Settings';
       default: return 'Admin Portal';
     }
@@ -262,6 +292,7 @@ export default function AdminPanel() {
     { tab: 'coupons', icon: Percent, label: 'Escrow Coupons' },
     { tab: 'customers', icon: Users, label: 'Customer Database' },
     { tab: 'orders', icon: Package, label: 'Platform Orders' },
+    { tab: 'tickets', icon: LifeBuoy, label: 'Support Tickets' },
     { tab: 'security', icon: Lock, label: 'Security' },
   ];
 
@@ -1006,6 +1037,181 @@ export default function AdminPanel() {
                 </div>
               </div>
             )}
+
+            {/* SELLER SUPPORT TICKETS */}
+            {activeTab === 'tickets' && (
+              <div key={activeTab} className="space-y-6 animate-tab-morph">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Merchant Support Helpdesk</h2>
+                    <p className="text-xs text-[#6b6560] mt-0.5">Manage and resolve inquiries, operational issues, and tickets raised by marketplace sellers</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-3 py-1.5 rounded-xl border border-[rgba(91,33,182,0.15)]">
+                      {tickets.length} Total Tickets
+                    </span>
+                  </div>
+                </div>
+
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#6b6560] uppercase">Status:</span>
+                    <div className="flex gap-1.5">
+                      {[
+                        { id: 'all', label: 'All' },
+                        { id: 'open', label: 'Open' },
+                        { id: 'in_progress', label: 'In Progress' },
+                        { id: 'closed', label: 'Closed' }
+                      ].map(f => (
+                        <button
+                          key={f.id}
+                          onClick={() => setTicketFilterStatus(f.id)}
+                          className={`px-3 py-1 text-xs font-bold rounded-xl transition-all ${
+                            ticketFilterStatus === f.id
+                              ? 'bg-[#5b21b6] text-white shadow-sm'
+                              : 'bg-gray-100 text-[#6b6560] hover:bg-gray-200'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="h-4 w-[1px] bg-gray-200 hidden sm:block" />
+
+                  <div className="flex items-center gap-2 flex-grow sm:flex-grow-0">
+                    <span className="text-xs font-bold text-[#6b6560] uppercase">Category:</span>
+                    <select
+                      value={ticketFilterCat}
+                      onChange={(e) => setTicketFilterCat(e.target.value)}
+                      className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-1 text-xs font-semibold text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                    >
+                      <option value="all">All Categories</option>
+                      <option value="payments_payouts">Payments & Payouts</option>
+                      <option value="order_issue">Order Issue</option>
+                      <option value="product_listing">Product Listing</option>
+                      <option value="account_kyc">Account & KYC</option>
+                      <option value="technical_bug">Technical Bug</option>
+                      <option value="shiprocket_delivery">Shiprocket & Delivery</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Tickets Grid / List */}
+                {tickets.length === 0 ? (
+                  <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">
+                    <LifeBuoy size={44} className="mx-auto text-[#5b21b6] mb-3 opacity-40" />
+                    <h3 className="text-base font-bold text-[#12100e]">No Support Tickets Found</h3>
+                    <p className="text-xs text-[#6b6560] mt-1">No seller tickets match the selected filters.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {tickets.map(t => {
+                      const categoryLabels = {
+                        payments_payouts: 'Payments & Payouts',
+                        order_issue: 'Order Issue',
+                        product_listing: 'Product Listing',
+                        account_kyc: 'Account & KYC',
+                        technical_bug: 'Technical Bug',
+                        shiprocket_delivery: 'Shiprocket & Delivery',
+                        other: 'Other'
+                      };
+
+                      return (
+                        <div key={t.id} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-4 transition-all hover:border-[rgba(91,33,182,0.2)]">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono text-xs font-black text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-lg">
+                                #TKT-{t.id}
+                              </span>
+                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-gray-100 text-gray-700">
+                                {categoryLabels[t.category] || t.category}
+                              </span>
+                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${
+                                t.status === 'open' ? 'bg-amber-100 text-amber-700' :
+                                t.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {t.status.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-[#9490b8] font-medium">
+                              Created: {new Date(t.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                            </span>
+                          </div>
+
+                          <div>
+                            <h4 className="text-sm font-bold text-[#12100e] mb-1">{t.subject}</h4>
+                            <p className="text-xs text-[#4b4642] leading-relaxed bg-[#faf8f4] p-3 rounded-xl border border-gray-100 whitespace-pre-wrap">
+                              {t.description}
+                            </p>
+                          </div>
+
+                          {/* Seller Info Strip */}
+                          <div className="flex flex-wrap items-center gap-4 text-xs text-[#6b6560] bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                            <span className="font-bold text-[#12100e]">Seller: {t.business_name || t.seller_name}</span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1"><Phone size={12} /> {t.seller_phone}</span>
+                            {t.seller_email && (
+                              <>
+                                <span>•</span>
+                                <span className="flex items-center gap-1"><Mail size={12} /> {t.seller_email}</span>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Admin Resolution Note / Response */}
+                          <div className="space-y-2 pt-2 border-t border-gray-100">
+                            <label className="text-[10px] font-bold text-[#6b6560] uppercase block">Admin Resolution Note / Reply to Seller</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <input
+                                type="text"
+                                placeholder={t.admin_note || "Type note/resolution message to seller..."}
+                                defaultValue={t.admin_note || ""}
+                                onChange={(e) => setTicketReplyNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
+                                className="flex-1 bg-[#f8f7ff] border border-gray-200 rounded-xl px-3 py-2 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                              />
+                              <div className="flex gap-2">
+                                {t.status !== 'in_progress' && t.status !== 'closed' && (
+                                  <button
+                                    onClick={() => handleUpdateTicket(t.id, 'in_progress')}
+                                    disabled={updatingTicketId === t.id}
+                                    className="px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl hover:bg-blue-100 transition-colors cursor-pointer"
+                                  >
+                                    Mark In Progress
+                                  </button>
+                                )}
+                                {t.status !== 'closed' ? (
+                                  <button
+                                    onClick={() => handleUpdateTicket(t.id, 'closed')}
+                                    disabled={updatingTicketId === t.id}
+                                    className="px-3 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700 transition-colors cursor-pointer"
+                                  >
+                                    Resolve & Close
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleUpdateTicket(t.id, 'open')}
+                                    disabled={updatingTicketId === t.id}
+                                    className="px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold rounded-xl hover:bg-amber-100 transition-colors cursor-pointer"
+                                  >
+                                    Re-Open Ticket
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* SECURITY SETTINGS */}
             {activeTab === 'security' && (
               <div className="max-w-2xl animate-fade-in space-y-6">
