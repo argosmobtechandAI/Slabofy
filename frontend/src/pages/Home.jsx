@@ -123,16 +123,21 @@ export default function Home() {
     }
   };
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (overrides = {}) => {
     setLoading(true); 
     setError(null);
     try {
+      const catId = overrides.category_id !== undefined ? overrides.category_id : selectedCategory;
+      const search = overrides.search !== undefined ? overrides.search : searchQuery;
+      const sort = overrides.sort_by !== undefined ? overrides.sort_by : sortBy;
+      const p = overrides.page !== undefined ? overrides.page : page;
+
       const res = await api.get('/products', { 
         params: { 
-          category_id: selectedCategory, 
-          search: searchQuery, 
-          sort_by: sortBy, 
-          page, 
+          category_id: catId || undefined, 
+          search: search || undefined, 
+          sort_by: sort || undefined, 
+          page: p, 
           limit: 12 
         } 
       });
@@ -149,7 +154,13 @@ export default function Home() {
   const handleSearchSubmit = (e) => { 
     e.preventDefault(); 
     setPage(1); 
-    fetchProducts(); 
+    fetchProducts({ search: searchQuery, page: 1 }); 
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setPage(1);
+    fetchProducts({ search: '', page: 1 });
   };
 
   const clearAllFilters = () => {
@@ -157,6 +168,7 @@ export default function Home() {
     setSearchQuery('');
     setSortBy('');
     setPage(1);
+    fetchProducts({ category_id: '', search: '', sort_by: '', page: 1 });
   };
 
   const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
@@ -608,8 +620,9 @@ export default function Home() {
                 {searchQuery && (
                   <button
                     type="button"
-                    onClick={() => { setSearchQuery(''); setPage(1); }}
+                    onClick={handleClearSearch}
                     style={{ position: 'absolute', right: 8, background: 'none', border: 'none', color: '#a09a94', cursor: 'pointer', padding: 2 }}
+                    title="Clear search"
                   >
                     <X size={14} />
                   </button>

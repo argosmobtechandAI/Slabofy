@@ -357,21 +357,21 @@ export const getProducts = async (req, res) => {
   try {
     let queryParams = [];
     let paramIndex = 1;
-    let whereClauses = ["status = 'active'"];
+    let whereClauses = ["p.status = 'active'"];
 
     if (category_id) {
-      whereClauses.push(`category_id = $${paramIndex}`);
+      whereClauses.push(`p.category_id = $${paramIndex}`);
       queryParams.push(category_id);
       paramIndex++;
     }
 
-    if (search) {
-      whereClauses.push(`(name ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`);
-      queryParams.push(`%${search}%`);
+    if (search && search.trim()) {
+      whereClauses.push(`(p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex} OR p.sku ILIKE $${paramIndex} OR c.name ILIKE $${paramIndex})`);
+      queryParams.push(`%${search.trim()}%`);
       paramIndex++;
     }
 
-    let orderByClause = 'ORDER BY created_at DESC';
+    let orderByClause = 'ORDER BY p.created_at DESC';
     if (sort_by === 'price_asc') {
       orderByClause = 'ORDER BY best_price ASC';
     } else if (sort_by === 'price_desc') {
@@ -412,7 +412,7 @@ export const getProducts = async (req, res) => {
     const productsResult = await pool.query(query, queryParams);
 
     // Total count for pagination
-    const countQuery = `SELECT COUNT(*) FROM products p ${whereQuery}`;
+    const countQuery = `SELECT COUNT(*) FROM products p LEFT JOIN categories c ON p.category_id = c.id ${whereQuery}`;
     const totalCountResult = await pool.query(countQuery, queryParams.slice(0, paramIndex - 1));
     const totalProducts = parseInt(totalCountResult.rows[0].count);
 
