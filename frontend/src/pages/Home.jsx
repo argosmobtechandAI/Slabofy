@@ -7,7 +7,7 @@ import {
   Search, SlidersHorizontal, RefreshCw, AlertTriangle, ArrowRight, Users, Zap, 
   TrendingUp, ShieldCheck, Star, Clock, Lock, Sparkles, Shirt, Smartphone, 
   Home as HomeIcon, ShoppingBag, Dumbbell, BookOpen, Gamepad2, LayoutGrid, Flame,
-  CheckCircle2, ChevronRight, Tag
+  CheckCircle2, ChevronRight, Tag, X, Filter
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useScrollReveal from '../hooks/useScrollReveal';
@@ -152,6 +152,13 @@ export default function Home() {
     fetchProducts(); 
   };
 
+  const clearAllFilters = () => {
+    setSelectedCategory('');
+    setSearchQuery('');
+    setSortBy('');
+    setPage(1);
+  };
+
   const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
   const getCategoryMeta = (cat) => {
@@ -175,6 +182,8 @@ export default function Home() {
       badge: 'Popular'
     };
   };
+
+  const hasActiveFilters = Boolean(selectedCategory || searchQuery || sortBy);
 
   return (
     <div style={{ background: '#faf8f4', minHeight: '100vh' }}>
@@ -227,7 +236,7 @@ export default function Home() {
                   alignItems: 'center',
                   gap: 4
                 }}>
-                  <Zap size={10} fill="#5b21b6" /> Social Co-Buying
+                  <Zap size={10} fill="#5b21b6" /> Co-Buying
                 </span>
                 <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#059669', display: 'flex', alignItems: 'center', gap: 3 }}>
                   <ShieldCheck size={12} /> 100% Buyer Protected
@@ -293,7 +302,7 @@ export default function Home() {
       </section>
 
       {/* ══ FLIPKART-STYLE MAJOR CATEGORIES BAR ══ */}
-      <section style={{ maxWidth: 1320, margin: '0 auto', padding: '8px 16px 16px' }}>
+      <section style={{ maxWidth: 1320, margin: '0 auto', padding: '8px 16px 14px' }}>
         <div style={{
           background: '#ffffff',
           borderRadius: 24,
@@ -325,7 +334,7 @@ export default function Home() {
             )}
           </div>
 
-          {/* Flipkart-style Horizontal Category Grid / Carousel */}
+          {/* Flipkart-style Horizontal Category Grid */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(105px, 1fr))',
@@ -457,149 +466,311 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ══ PRODUCTS SECTION (IMMEDIATELY VISIBLE ON TOP) ══ */}
-      <section ref={revealRef1} id="products" style={{ maxWidth: 1320, margin: '0 auto', padding: '12px 16px 80px' }}>
+      {/* ══ ACTIVE DEAL ROOMS STRIP (IF ACTIVE GROUPS EXIST) ══ */}
+      {activeGlobalGroups.length > 0 && (
+        <section style={{ maxWidth: 1320, margin: '0 auto', padding: '0 16px 16px' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #fff 0%, #fff7ed 100%)',
+            border: '1px solid rgba(240,80,53,0.18)',
+            borderRadius: 20,
+            padding: '16px 20px',
+            boxShadow: '0 4px 20px rgba(240,80,53,0.06)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f05035', animation: 'pulse-ring 2s infinite' }} />
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#12100e', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Live Co-Buying Deal Rooms
+                </span>
+                <span style={{ fontSize: '0.65rem', background: 'rgba(240,80,53,0.1)', color: '#f05035', fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
+                  {activeGlobalGroups.length} Active Now
+                </span>
+              </div>
+              <span style={{ fontSize: '0.7rem', color: '#6b6560' }}>
+                Join existing teams to lock in group savings before slots close!
+              </span>
+            </div>
 
-        {/* Section label & Responsive Search */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-          <div>
-            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 4 }}>
-              — Live Marketplace
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+              {activeGlobalGroups.slice(0, 4).map((group, idx) => (
+                <a
+                  href={`/product/${group.product_id}`}
+                  key={`${group.id}-${idx}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    background: '#fff',
+                    borderRadius: 14,
+                    padding: '10px 12px',
+                    border: '1px solid rgba(18,16,14,0.06)',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 2px 8px rgba(18,16,14,0.03)'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#5b21b6'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(18,16,14,0.06)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                >
+                  <img
+                    src={group.product_image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&auto=format&fit=crop&q=70'}
+                    alt=""
+                    style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', background: '#f2ede4', flexShrink: 0 }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#12100e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {group.product_name || 'Product'}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 3 }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#059669' }}>
+                        {fmt(group.tier_price)}
+                      </span>
+                      <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#f05035', display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <Zap size={9} fill="#f05035" /> {group.slots_remaining} left
+                      </span>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ══ PRODUCTS SECTION (CLEAN UNIFIED TOOLBAR + FULL-WIDTH 4-COLUMN GRID) ══ */}
+      <section ref={revealRef1} id="products" style={{ maxWidth: 1320, margin: '0 auto', padding: '8px 16px 80px' }}>
+
+        {/* Clean, Professional Unified Header & Controls Toolbar */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: 20,
+          padding: '14px 20px',
+          border: '1px solid rgba(18,16,14,0.07)',
+          boxShadow: '0 2px 12px rgba(18,16,14,0.02)',
+          marginBottom: 24,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 16
+        }}>
+          {/* Left: Heading & Count Indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div>
+              <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.12em', display: 'block' }}>
+                — Live Marketplace
+              </span>
+              <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.25rem, 2.5vw, 1.7rem)', color: '#12100e', margin: 0, lineHeight: 1.2 }}>
+                Trending Group Deals
+              </h2>
+            </div>
+            <span style={{
+              background: '#faf8f4',
+              border: '1px solid rgba(18,16,14,0.08)',
+              padding: '4px 10px',
+              borderRadius: 999,
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              color: '#6b6560'
+            }}>
+              {products.length} Deals
             </span>
-            <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.4rem, 3.2vw, 2.2rem)', color: '#12100e', margin: 0 }}>
-              Trending Group Deals
-            </h2>
           </div>
 
-          {/* Search form with full mobile responsiveness */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 320 }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <Search size={14} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#a09a94' }} />
+          {/* Right: Unified Search Bar + Sort Dropdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginLeft: 'auto' }}>
+            {/* Integrated Search Input */}
+            <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <Search size={15} style={{ position: 'absolute', left: 12, color: '#a09a94', pointerEvents: 'none' }} />
                 <input
-                  type="text" placeholder="Search products, brands..."
-                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  className="input-premium"
-                  style={{ paddingLeft: 38, paddingTop: 8, paddingBottom: 8, width: '100%', fontSize: '0.8rem', borderRadius: 12 }}
+                  type="text"
+                  placeholder="Search products, brands..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  style={{
+                    height: 40,
+                    paddingLeft: 36,
+                    paddingRight: searchQuery ? 32 : 12,
+                    fontSize: '0.8rem',
+                    borderRadius: '12px 0 0 12px',
+                    border: '1.5px solid rgba(18,16,14,0.12)',
+                    borderRight: 'none',
+                    background: '#faf8f4',
+                    color: '#12100e',
+                    outline: 'none',
+                    width: 'clamp(170px, 20vw, 240px)',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={e => e.currentTarget.style.borderColor = '#5b21b6'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'rgba(18,16,14,0.12)'}
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(''); setPage(1); }}
+                    style={{ position: 'absolute', right: 8, background: 'none', border: 'none', color: '#a09a94', cursor: 'pointer', padding: 2 }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
-              <button type="submit" className="btn-violet" style={{ padding: '8px 16px', fontSize: '0.8rem', borderRadius: 12, flexShrink: 0 }}>
+              <button
+                type="submit"
+                style={{
+                  height: 40,
+                  padding: '0 16px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  borderRadius: '0 12px 12px 0',
+                  background: '#5b21b6',
+                  color: '#ffffff',
+                  border: '1.5px solid #5b21b6',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#4c1d95'}
+                onMouseLeave={e => e.currentTarget.style.background = '#5b21b6'}
+              >
                 Search
               </button>
             </form>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <SlidersHorizontal size={13} style={{ color: '#a09a94' }} />
+            {/* Sort Selector */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <SlidersHorizontal size={13} style={{ position: 'absolute', left: 12, color: '#a09a94', pointerEvents: 'none' }} />
               <select
-                value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }}
-                className="input-premium"
-                style={{ padding: '8px 32px 8px 14px', fontSize: '0.78rem', width: 'auto', minWidth: 150, borderRadius: 12, background: '#fff' }}
+                value={sortBy}
+                onChange={e => { setSortBy(e.target.value); setPage(1); }}
+                style={{
+                  height: 40,
+                  paddingLeft: 32,
+                  paddingRight: 32,
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  borderRadius: 12,
+                  border: '1.5px solid rgba(18,16,14,0.12)',
+                  background: '#faf8f4',
+                  color: '#12100e',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
               >
                 <option value="">Sort: Relevance</option>
                 <option value="price_asc">Price: Low to High</option>
                 <option value="price_desc">Price: High to Low</option>
               </select>
             </div>
+
+            {/* Clear Filters Button (If active) */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                style={{
+                  height: 40,
+                  padding: '0 12px',
+                  borderRadius: 12,
+                  background: 'rgba(240,80,53,0.08)',
+                  border: '1px solid rgba(240,80,53,0.2)',
+                  color: '#f05035',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}
+                title="Clear all filters"
+              >
+                <X size={13} /> Reset
+              </button>
+            )}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          
-          {/* LEFT: Products Grid & Pagination (75%) */}
-          <div style={{ flex: '1 1 68%', minWidth: 0 }}>
-            {/* Products grid */}
-            {loading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '60px 0' }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(91,33,182,0.15)', borderTopColor: '#5b21b6', animation: 'spin-slow 0.7s linear infinite' }} />
-                <p style={{ color: '#a09a94', fontWeight: 600, fontSize: '0.85rem' }}>Loading group deals...</p>
-              </div>
-            ) : error ? (
-              <div style={{ background: '#fff', borderRadius: 24, padding: 36, textAlign: 'center', border: '1px solid rgba(240,80,53,0.15)', maxWidth: 420, margin: '0 auto' }}>
-                <AlertTriangle size={36} color="#f05035" style={{ marginBottom: 12 }} />
-                <h4 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.1rem', marginBottom: 6 }}>Backend Offline</h4>
-                <p style={{ color: '#a09a94', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 18 }}>{error}</p>
-                <button onClick={fetchProducts} className="btn-violet" style={{ borderRadius: 12, padding: '8px 20px', fontSize: '0.82rem' }}>
-                  Retry
-                </button>
-              </div>
-            ) : products.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 0', border: '2px dashed rgba(18,16,14,0.1)', borderRadius: 24, background: '#fff' }}>
-                <Users size={36} style={{ marginBottom: 12, color: '#a09a94' }} />
-                <p style={{ fontWeight: 700, color: '#12100e', fontSize: '0.95rem' }}>No products found</p>
-                <p style={{ fontSize: '0.8rem', color: '#a09a94', marginTop: 4 }}>Try selecting a different category or search term.</p>
-                <button onClick={() => { setSelectedCategory(''); setSearchQuery(''); }} className="btn-ink" style={{ marginTop: 14, fontSize: '0.78rem', padding: '8px 16px', borderRadius: 10 }}>
-                  View All Products
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 20 }}>
-                {products.map(p => <ProductCard key={p.id} product={p} />)}
-              </div>
-            )}
-
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, paddingTop: 40 }}>
-                <button
-                  disabled={page === 1} onClick={() => setPage(page - 1)}
-                  style={{ padding: '8px 20px', borderRadius: 100, background: '#fff', border: '1px solid rgba(18,16,14,0.12)', fontSize: '0.8rem', fontWeight: 700, color: page === 1 ? '#c8c3bd' : '#12100e', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
-                >← Prev</button>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#6b6560', padding: '0 8px' }}>
-                  {page} / {pagination.totalPages}
-                </span>
-                <button
-                  disabled={page === pagination.totalPages} onClick={() => setPage(page + 1)}
-                  style={{ padding: '8px 20px', borderRadius: 100, background: page === pagination.totalPages ? '#f7f5f2' : '#12100e', border: 'none', fontSize: '0.8rem', fontWeight: 700, color: page === pagination.totalPages ? '#c8c3bd' : '#faf8f4', cursor: page === pagination.totalPages ? 'not-allowed' : 'pointer', boxShadow: page === pagination.totalPages ? 'none' : '0 4px 16px rgba(18,16,14,0.3)' }}
-                >Next →</button>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT: Active Global Groups Marquee (28%) */}
-          <div className="active-teams-sidebar" style={{ flex: '0 0 290px', position: 'sticky', top: 88 }}>
-            <div style={{ background: '#fff', borderRadius: 24, border: '1px solid rgba(18,16,14,0.08)', padding: '20px 18px', boxShadow: '0 4px 24px rgba(18,16,14,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, borderBottom: '1px solid rgba(18,16,14,0.08)', paddingBottom: 14 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f05035', animation: 'pulse-ring 2s infinite' }} />
-                <h3 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1rem', color: '#12100e', margin: 0 }}>Active Deal Rooms</h3>
-              </div>
-              
-              <div className="marquee-container" style={{ maxHeight: 440, overflow: 'hidden', position: 'relative', WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 5%, black 95%, transparent)' }}>
-                <div className={activeGlobalGroups.length > 3 ? "marquee-content" : ""} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    {activeGlobalGroups.length > 0 ? [...activeGlobalGroups, ...(activeGlobalGroups.length > 3 ? activeGlobalGroups : [])].map((group, idx) => (
-                      <a href={`/product/${group.product_id}`} key={`${group.id}-${idx}`} style={{ display: 'block', textDecoration: 'none', background: '#faf8f4', borderRadius: 16, padding: 14, border: '1px solid rgba(18,16,14,0.05)', transition: 'all 0.2s', color: 'inherit' }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#5b21b6'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(18,16,14,0.05)'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                          <img src={group.product_image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&auto=format&fit=crop&q=70'} alt="" style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'cover', background: '#f2ede4', border: '1px solid rgba(18,16,14,0.05)' }} />
-                          <div>
-                            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#12100e', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{group.product_name || 'Product'}</div>
-                            <div style={{ fontSize: '0.65rem', color: '#a09a94', marginTop: 1 }}>Started by <span style={{ fontWeight: 600, color: '#6b6560' }}>{group.creator_name}</span></div>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', fontWeight: 700 }}>
-                          <span style={{ color: '#059669', background: 'rgba(5,150,105,0.1)', padding: '2px 8px', borderRadius: 6 }}>{fmt(group.tier_price)}</span>
-                          <span style={{ color: '#f05035', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Zap size={10} fill="#f05035" />
-                            {group.slots_remaining} slot{group.slots_remaining !== 1 ? 's' : ''} left
-                          </span>
-                        </div>
-                      </a>
-                    )) : (
-                      <div style={{ textAlign: 'center', color: '#a09a94', fontSize: '0.78rem', padding: '20px 0' }}>No active deal rooms right now.</div>
-                    )}
-                </div>
-              </div>
-              
-              <a href="#products" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, width: '100%', padding: '10px', marginTop: 14, background: '#faf8f4', borderRadius: 12, textDecoration: 'none', color: '#5b21b6', fontSize: '0.75rem', fontWeight: 700, border: '1px dashed rgba(91,33,182,0.2)', transition: 'all 0.2s' }}
-                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(91,33,182,0.05)'; e.currentTarget.style.borderColor = 'rgba(91,33,182,0.4)'; }}
-                 onMouseLeave={e => { e.currentTarget.style.background = '#faf8f4'; e.currentTarget.style.borderColor = 'rgba(91,33,182,0.2)'; }}
-              >
-                Start a New Team
-              </a>
+        {/* FULL-WIDTH 4-COLUMN PRODUCT GRID */}
+        <div>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '80px 0' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', border: '3px solid rgba(91,33,182,0.15)', borderTopColor: '#5b21b6', animation: 'spin-slow 0.7s linear infinite' }} />
+              <p style={{ color: '#a09a94', fontWeight: 600, fontSize: '0.88rem' }}>Loading verified group deals...</p>
             </div>
-          </div>
-          
+          ) : error ? (
+            <div style={{ background: '#fff', borderRadius: 24, padding: 40, textAlign: 'center', border: '1px solid rgba(240,80,53,0.15)', maxWidth: 420, margin: '40px auto' }}>
+              <AlertTriangle size={40} color="#f05035" style={{ marginBottom: 12 }} />
+              <h4 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.1rem', marginBottom: 6 }}>Unable to load deals</h4>
+              <p style={{ color: '#a09a94', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 18 }}>{error}</p>
+              <button onClick={fetchProducts} className="btn-violet" style={{ borderRadius: 12, padding: '9px 22px', fontSize: '0.82rem' }}>
+                Retry
+              </button>
+            </div>
+          ) : products.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '80px 20px', border: '2px dashed rgba(18,16,14,0.1)', borderRadius: 24, background: '#fff', margin: '20px 0' }}>
+              <Users size={40} style={{ marginBottom: 12, color: '#a09a94' }} />
+              <h3 style={{ fontWeight: 800, color: '#12100e', fontSize: '1.1rem' }}>No products found</h3>
+              <p style={{ fontSize: '0.82rem', color: '#a09a94', marginTop: 4, maxWidth: 360, marginInline: 'auto' }}>
+                No active deals match your current category or search criteria.
+              </p>
+              <button onClick={clearAllFilters} className="btn-ink" style={{ marginTop: 16, fontSize: '0.8rem', padding: '10px 20px', borderRadius: 12 }}>
+                Browse All Products
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
+              gap: 24
+            }}>
+              {products.map(p => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, paddingTop: 48 }}>
+              <button
+                disabled={page === 1}
+                onClick={() => setPage(page - 1)}
+                style={{
+                  padding: '9px 22px',
+                  borderRadius: 100,
+                  background: '#fff',
+                  border: '1.5px solid rgba(18,16,14,0.12)',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: page === 1 ? '#c8c3bd' : '#12100e',
+                  cursor: page === 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ← Prev
+              </button>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#6b6560', padding: '0 10px' }}>
+                Page {page} of {pagination.totalPages}
+              </span>
+              <button
+                disabled={page === pagination.totalPages}
+                onClick={() => setPage(page + 1)}
+                style={{
+                  padding: '9px 22px',
+                  borderRadius: 100,
+                  background: page === pagination.totalPages ? '#f7f5f2' : '#12100e',
+                  border: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: page === pagination.totalPages ? '#c8c3bd' : '#faf8f4',
+                  cursor: page === pagination.totalPages ? 'not-allowed' : 'pointer',
+                  boxShadow: page === pagination.totalPages ? 'none' : '0 4px 16px rgba(18,16,14,0.25)'
+                }}
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
