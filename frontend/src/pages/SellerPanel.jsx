@@ -155,6 +155,16 @@ export default function SellerPanel() {
   const [restockVariants, setRestockVariants] = useState([]);
   const [restockSubmitting, setRestockSubmitting] = useState(false);
 
+  // Edit Product & Tiers Modal State
+  const [editProductModal, setEditProductModal] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editSku, setEditSku] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editStock, setEditStock] = useState(0);
+  const [editMaxGroupSize, setEditMaxGroupSize] = useState(10);
+  const [editTiers, setEditTiers] = useState([]);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
   // Support Tickets State
   const [myTickets, setMyTickets] = useState([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
@@ -494,6 +504,73 @@ export default function SellerPanel() {
       toast.error(err.response?.data?.error || 'Failed to update stock');
     } finally {
       setRestockSubmitting(false);
+    }
+  };
+
+  const handleOpenEditProduct = (p) => {
+    setEditProductModal(p);
+    setEditName(p.name || '');
+    setEditSku(p.sku || '');
+    setEditDescription(p.description || '');
+    setEditStock(p.stock || 0);
+    setEditMaxGroupSize(p.max_group_size || 10);
+    setEditTiers(
+      Array.isArray(p.tiers) && p.tiers.length > 0
+        ? p.tiers.map(t => ({ group_size: t.group_size, price: t.price }))
+        : [
+            { group_size: 1, price: '' },
+            { group_size: p.max_group_size || 5, price: '' }
+          ]
+    );
+  };
+
+  const handleEditTierChange = (idx, field, val) => {
+    setEditTiers(prev => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [field]: val };
+      return updated;
+    });
+  };
+
+  const handleAddEditTier = () => {
+    setEditTiers(prev => [...prev, { group_size: '', price: '' }]);
+  };
+
+  const handleRemoveEditTier = (idx) => {
+    if (idx === 0) return toast.error('Solo tier (size 1) cannot be removed');
+    setEditTiers(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveEditProduct = async () => {
+    if (!editProductModal) return;
+    if (!editName.trim()) return toast.error('Product name is required');
+
+    const parsedTiers = editTiers.map(t => ({
+      group_size: parseInt(t.group_size),
+      price: parseFloat(t.price)
+    })).filter(t => !isNaN(t.group_size) && !isNaN(t.price) && t.price > 0);
+
+    if (!parsedTiers.some(t => t.group_size === 1)) {
+      return toast.error('A solo tier (group size = 1) is required');
+    }
+
+    setEditSubmitting(true);
+    try {
+      await api.put(`/products/${editProductModal.id}`, {
+        name: editName.trim(),
+        sku: editSku.trim(),
+        description: editDescription.trim(),
+        stock: parseInt(editStock) || 0,
+        max_group_size: parseInt(editMaxGroupSize) || 10,
+        tiers: parsedTiers
+      });
+      toast.success('Product details and pricing tiers updated successfully!');
+      setEditProductModal(null);
+      fetchInventory();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update product');
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -1347,12 +1424,20 @@ export default function SellerPanel() {
                                 )}
                               </td>
                               <td className="py-4 px-5 text-right">
-                                <button
-                                  onClick={() => handleOpenRestockModal(p)}
-                                  className="bg-gray-100 hover:bg-[#5b21b6] hover:text-white text-gray-800 text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5"
-                                >
-                                  <Edit3 size={12} /> Restock
-                                </button>
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleOpenEditProduct(p)}
+                                    className="bg-[rgba(91,33,182,0.08)] hover:bg-[#5b21b6] text-[#5b21b6] hover:text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 border border-[rgba(91,33,182,0.15)]"
+                                  >
+                                    <Edit3 size={12} /> Edit Tiers
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRestockModal(p)}
+                                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5"
+                                  >
+                                    <Package size={12} /> Stock
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -2579,12 +2664,12 @@ export default function SellerPanel() {
         </div>
       )}
 
-      {/* RESTOCK & INVENTORY UPDATE MODAL */}
-      {restockProduct && (
+      {/* EDIT PRODUCT & PRICING TIERS MODAL */}
+      {editProductModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-white rounded-3xl p-6 md:p-8 space-y-6 relative border border-gray-200 shadow-2xl">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white rounded-3xl p-6 md:p-8 space-y-6 relative border border-gray-200 shadow-2xl">
             <button 
-              onClick={() => setRestockProduct(null)} 
+              onClick={() => setEditProductModal(null)} 
               className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 cursor-pointer"
             >
               <X size={20}/>
@@ -2592,72 +2677,158 @@ export default function SellerPanel() {
 
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-full">
-                Warehouse Restock
+                Edit Product & Pricing
               </span>
               <h3 className="text-xl font-bold font-display text-[#1e1b4b] mt-2">
-                Restock Inventory
+                Edit Listing & Co-Buying Tiers
               </h3>
-              <p className="text-xs text-[#6b6560] line-clamp-1 mt-0.5 font-semibold">
-                {restockProduct.name} ({restockProduct.sku || 'SKU N/A'})
+              <p className="text-xs text-[#6b6560] mt-0.5 font-semibold">
+                Update product title, SKU, description, master stock, or change tier discount prices.
               </p>
             </div>
 
             <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#12100e] uppercase">Total Master Stock Quantity</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={restockStockValue}
-                  onChange={(e) => setRestockStockValue(e.target.value)}
-                  className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
-                />
-                <p className="text-[10px] text-[#9490b8]">This represents total available warehouse stock for solo/group deals.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">Product Name</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">SKU Reference</label>
+                  <input
+                    type="text"
+                    value={editSku}
+                    onChange={(e) => setEditSku(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                  />
+                </div>
               </div>
 
-              {restockVariants && restockVariants.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-gray-100">
-                  <label className="text-xs font-bold text-[#12100e] uppercase block">Variant Stock Allocations</label>
-                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
-                    {restockVariants.map((v, vi) => (
-                      <div key={vi} className="flex items-center justify-between p-2.5 bg-[#faf8f4] border border-gray-100 rounded-xl">
-                        <span className="text-xs font-semibold text-[#12100e]">
-                          {[v.color, v.size].filter(Boolean).join(' / ') || 'Standard Variant'}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#12100e] uppercase">Description</label>
+                <textarea
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">Master Stock Quantity</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editStock}
+                    onChange={(e) => setEditStock(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">Max Group Size</label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="100"
+                    value={editMaxGroupSize}
+                    onChange={(e) => setEditMaxGroupSize(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                  />
+                </div>
+              </div>
+
+              {/* Co-Buying Pricing Tiers Edit */}
+              <div className="space-y-3 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">
+                    Co-Buying Pricing Tiers
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddEditTier}
+                    className="text-[10px] font-bold text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-lg hover:bg-[rgba(91,33,182,0.15)] transition-colors cursor-pointer"
+                  >
+                    + Add Tier
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#9490b8]">
+                  Tier 1 is Solo Price (Size = 1). Larger group sizes should have lower discounted prices.
+                </p>
+
+                <div className="space-y-2">
+                  {editTiers.map((tier, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-[#faf8f4] p-2.5 rounded-xl border border-gray-100">
+                      <div className="w-28">
+                        <span className="text-[9px] font-bold text-[#9490b8] uppercase block">
+                          {idx === 0 ? 'Solo (1 User)' : `Team Size`}
                         </span>
                         <input
                           type="number"
-                          min="0"
-                          value={v.stock}
-                          onChange={(e) => {
-                            const updated = [...restockVariants];
-                            updated[vi] = { ...updated[vi], stock: parseInt(e.target.value) || 0 };
-                            setRestockVariants(updated);
-                          }}
-                          className="w-20 bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-bold text-center text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                          min="1"
+                          value={idx === 0 ? 1 : tier.group_size}
+                          readOnly={idx === 0}
+                          onChange={(e) => handleEditTierChange(idx, 'group_size', e.target.value)}
+                          placeholder="e.g. 5"
+                          className={`w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-bold text-center ${
+                            idx === 0 ? 'text-gray-400 cursor-not-allowed bg-gray-50' : 'text-[#12100e]'
+                          }`}
                         />
                       </div>
-                    ))}
-                  </div>
+
+                      <div className="flex-1">
+                        <span className="text-[9px] font-bold text-[#9490b8] uppercase block">
+                          Price per unit (₹)
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          step="0.01"
+                          value={tier.price}
+                          onChange={(e) => handleEditTierChange(idx, 'price', e.target.value)}
+                          placeholder="e.g. 999"
+                          className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-bold text-[#5b21b6] focus:outline-none focus:border-[#5b21b6]"
+                        />
+                      </div>
+
+                      {idx > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEditTier(idx)}
+                          className="text-red-500 hover:text-red-700 p-1 mt-3"
+                          title="Remove Tier"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-2 border-t border-gray-100">
               <button
                 type="button"
-                onClick={() => setRestockProduct(null)}
+                onClick={() => setEditProductModal(null)}
                 className="flex-1 bg-gray-100 text-gray-700 font-bold rounded-xl py-3 text-xs hover:bg-gray-200 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleSaveRestock}
-                disabled={restockSubmitting}
+                onClick={handleSaveEditProduct}
+                disabled={editSubmitting}
                 className="flex-1 bg-[#5b21b6] text-white font-bold rounded-xl py-3 text-xs flex items-center justify-center gap-2 hover:bg-[#4338ca] disabled:opacity-50 cursor-pointer shadow-md shadow-violet-500/20"
               >
-                {restockSubmitting ? <RefreshCw className="animate-spin" size={14} /> : <Check size={14} />}
-                {restockSubmitting ? 'Saving Stock...' : 'Save Stock Levels'}
+                {editSubmitting ? <RefreshCw className="animate-spin" size={14} /> : <Check size={14} />}
+                {editSubmitting ? 'Saving Changes...' : 'Save Product Changes'}
               </button>
             </div>
           </div>

@@ -168,27 +168,56 @@ export const createProduct = async (req, res) => {
  */
 export const editProduct = async (req, res) => {
   const { id } = req.params;
-  const { description, images, stock, weight_kg, length_cm, breadth_cm, height_cm } = req.body;
+  const {
+    name, category_id, sku, description, images, stock,
+    weight_kg, length_cm, breadth_cm, height_cm,
+    max_group_size, group_window_hours,
+    tiers, variants
+  } = req.body;
   const sellerId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
 
+  const client = await pool.connect();
   try {
     // 1. Verify product ownership
-    const productCheck = await pool.query(
+    const productCheck = await client.query(
       'SELECT id, seller_id FROM products WHERE id = $1',
       [id]
     );
     const product = productCheck.rows[0];
     if (!product) {
+      client.release();
       return res.status(404).json({ error: 'Product not found' });
     }
-    if (product.seller_id !== sellerId) {
+    if (product.seller_id !== sellerId && !isAdmin) {
+      client.release();
       return res.status(403).json({ error: 'Access Denied: Product ownership mismatch' });
     }
 
-    // 2. Perform updates
+    await client.query('BEGIN');
+
+    // 2. Perform updates on products table
     let updateFields = [];
     let queryParams = [];
     let paramIndex = 1;
+
+    if (name !== undefined) {
+      updateFields.push(`name = $${paramIndex}`);
+      queryParams.push(name);
+      paramIndex++;
+    }
+
+    if (category_id !== undefined) {
+      updateFields.push(`category_id = $${paramIndex}`);
+      queryParams.push(category_id ? parseInt(category_id) : null);
+      paramIndex++;
+    }
+
+    if (sku !== undefined) {
+      updateFields.push(`sku = $${paramIndex}`);
+      queryParams.push(sku);
+      paramIndex++;
+    }
 
     if (description !== undefined) {
       updateFields.push(`description = $${paramIndex}`);
@@ -204,7 +233,19 @@ export const editProduct = async (req, res) => {
 
     if (stock !== undefined) {
       updateFields.push(`stock = $${paramIndex}`);
-      queryParams.push(stock);
+      queryParams.push(parseInt(stock) || 0);
+      paramIndex++;
+    }
+
+    if (max_group_size !== undefined) {
+      updateFields.push(`max_group_size = $${paramIndex}`);
+      queryParams.push(parseInt(max_group_size));
+      paramIndex++;
+    }
+
+    if (group_window_hours !== undefined) {
+      updateFields.push(`group_window_hours = $${paramIndex}`);
+      queryParams.push(parseInt(group_window_hours));
       paramIndex++;
     }
 
@@ -232,19 +273,75 @@ export const editProduct = async (req, res) => {
       paramIndex++;
     }
 
-    if (updateFields.length === 0) {
-      return res.status(400).json({ error: 'No update fields provided' });
+    if (updateFields.length > 0) {
+      queryParams.push(id);
+      const query = `UPDATE products SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`;
+      await client.query(query, queryParams);
     }
 
-    queryParams.push(id);
-    const query = `UPDATE products SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-    const updated = await pool.query(query, queryParams);
+    // 3. Update Tiers if provided
+    if (tiers && Array.isArray(tiers) && tiers.length > 0) {
+      const parsedTiers = tiers.map(t => ({
+        group_size: parseInt(t.group_size),
+        price: parseFloat(t.price)
+      })).filter(t => !isNaN(t.group_size) && !isNaN(t.price) && t.price > 0);
+
+      if (!parsedTiers.some(t => t.group_size === 1)) {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(400).json({ error: 'A solo tier (group_size = 1) is required' });
+      }
+
+      // Delete existing tiers and insert updated
+      await client.query('DELETE FROM product_tiers WHERE product_id = $1', [id]);
+      for (const t of parsedTiers) {
+        await client.query(
+          'INSERT INTO product_tiers (product_id, group_size, price) VALUES ($1, $2, $3)',
+          [id, t.group_size, t.price]
+        );
+      }
+    }
+
+    // 4. Update Variants if provided
+    if (variants && Array.isArray(variants)) {
+      await client.query('DELETE FROM product_variants WHERE product_id = $1', [id]);
+      for (const v of variants) {
+        if (v.color || v.size) {
+          await client.query(
+            'INSERT INTO product_variants (product_id, color, size, stock, image_url) VALUES ($1, $2, $3, $4, $5)',
+            [id, v.color || 'Default', v.size || 'Default', parseInt(v.stock) || 0, v.image_url || null]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    // Fetch updated product with tiers and variants
+    const updatedRes = await client.query(`
+      SELECT p.*, c.name as category_name,
+             COALESCE((
+               SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price) ORDER BY pt.group_size ASC)
+               FROM product_tiers pt WHERE pt.product_id = p.id
+             ), '[]'::json) as tiers,
+             COALESCE((
+               SELECT json_agg(json_build_object('id', pv.id, 'color', pv.color, 'size', pv.size, 'stock', pv.stock, 'image_url', pv.image_url))
+               FROM product_variants pv WHERE pv.product_id = p.id
+             ), '[]'::json) as variants
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.id = $1
+    `, [id]);
+
+    client.release();
 
     return res.status(200).json({
       message: 'Product updated successfully',
-      product: updated.rows[0]
+      product: updatedRes.rows[0]
     });
   } catch (error) {
+    await client.query('ROLLBACK');
+    client.release();
     console.error('Error in editProduct:', error.message);
     return res.status(500).json({ error: 'Server error editing product' });
   }

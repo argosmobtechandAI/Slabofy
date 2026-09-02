@@ -45,8 +45,6 @@ export default function ProductDetail() {
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
 
-  const revealRef1 = useScrollReveal();
-  const revealRef2 = useScrollReveal();
   const tiltRef = use3DTilt({ maxTilt: 8, scale: 1.02 });
 
   useEffect(() => { 
@@ -154,7 +152,7 @@ export default function ProductDetail() {
         <div className="grid-responsive-2col">
 
           {/* LEFT — Images */}
-          <div ref={revealRef1} className="scroll-reveal-group" style={{ width: '100%' }}>
+          <div style={{ width: '100%' }}>
             {/* Main Image */}
             <div ref={tiltRef} className="tilt-card" style={{
               background: '#f2ede4', borderRadius: 28, overflow: 'hidden', aspectRatio: '4/3', marginBottom: 16,
@@ -194,9 +192,9 @@ export default function ProductDetail() {
           </div>
 
           {/* RIGHT — Info + Buy Panel */}
-          <div ref={revealRef2} className="scroll-reveal-group" style={{ width: '100%' }}>
+          <div style={{ width: '100%' }}>
             
-            <div className="animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+            <div className="animate-fade-in-up" style={{ animationDelay: '50ms' }}>
               <span className="badge-pill badge-ink" style={{ marginBottom: 16, display: 'inline-flex', background: 'rgba(91,33,182,0.08)', padding: '4px 12px', borderRadius: 999, color: '#5b21b6', fontSize: '0.65rem', fontWeight: 800 }}>
                 <Tag size={11} /> Special Co-Buy Price
               </span>
