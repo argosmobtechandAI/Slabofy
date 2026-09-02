@@ -383,10 +383,16 @@ export const getProducts = async (req, res) => {
     // Query fetching products along with their pricing tiers aggregated, plus the group-10 price (best price)
     const query = `
       SELECT p.*, c.name as category_name,
-             (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = 1) as solo_price,
-             (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = p.max_group_size) as best_price,
+             COALESCE(
+               (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = 1 LIMIT 1),
+               (SELECT price FROM product_tiers WHERE product_id = p.id ORDER BY group_size ASC LIMIT 1)
+             ) as solo_price,
+             COALESCE(
+               (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size > 1 ORDER BY price ASC LIMIT 1),
+               (SELECT price FROM product_tiers WHERE product_id = p.id ORDER BY price ASC LIMIT 1)
+             ) as best_price,
              COALESCE((
-               SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price))
+               SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price) ORDER BY pt.group_size ASC)
                FROM product_tiers pt WHERE pt.product_id = p.id
              ), '[]'::json) as tiers,
              (
