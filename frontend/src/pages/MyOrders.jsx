@@ -105,7 +105,6 @@ export default function MyOrders() {
   // Profile Form State
   const [profileName, setProfileName] = useState('');
   const [profileData, setProfileData] = useState({ name: '', phone: '', address: '' });
-  const revealRef = useScrollReveal();
   const [profileSubmitting, setProfileSubmitting] = useState(false);
 
   useEffect(() => {
@@ -268,7 +267,7 @@ export default function MyOrders() {
 
   return (
     <div className="mesh-violet" style={{ minHeight: '100vh', padding: '100px 24px 80px' }}>
-      <div ref={revealRef} className="scroll-reveal-group" style={{ maxWidth: 860, margin: '0 auto' }}>
+      <div style={{ maxWidth: 860, margin: '0 auto' }}>
 
         {/* Page header */}
         <div style={{ marginBottom: 40 }}>

@@ -1,10 +1,17 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 
 export default function useScrollReveal(options = {}) {
-  const ref = useRef(null);
+  const domNodeRef = useRef(null);
+  const observerRef = useRef(null);
 
-  useEffect(() => {
-    const el = ref.current;
+  const setRef = useCallback((el) => {
+    domNodeRef.current = el;
+
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+
     if (!el) return;
 
     if (typeof IntersectionObserver === 'undefined') {
@@ -32,22 +39,35 @@ export default function useScrollReveal(options = {}) {
 
     el.classList.add('scroll-reveal-group');
     observer.observe(el);
+    observerRef.current = observer;
 
-    // Safety fallback: ensure element is revealed if observer doesn't trigger quickly
+    // Immediate viewport check: if already in or near viewport, reveal immediately
+    if (typeof window !== 'undefined') {
+      const rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight + 100) {
+        el.classList.add('scroll-visible');
+      }
+    }
+
+    // Safety fallback
     const timer = setTimeout(() => {
       if (el && !el.classList.contains('scroll-visible')) {
-        const rect = el.getBoundingClientRect();
-        if (rect.top < window.innerHeight + 200) {
-          el.classList.add('scroll-visible');
-        }
+        el.classList.add('scroll-visible');
       }
-    }, 200);
+    }, 150);
 
     return () => {
       clearTimeout(timer);
-      if (el) observer.unobserve(el);
+      observer.disconnect();
     };
   }, [options.threshold, options.rootMargin, options.persist]);
 
-  return ref;
+  // Support both ref={revealRef} and revealRef.current
+  Object.defineProperty(setRef, 'current', {
+    get: () => domNodeRef.current,
+    set: (node) => { setRef(node); },
+    configurable: true
+  });
+
+  return setRef;
 }
