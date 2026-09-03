@@ -251,6 +251,51 @@ export default function SellerPanel() {
     }
   };
 
+  const fetchSellerReturns = async () => {
+    setReturnsLoading(true);
+    try {
+      const res = await api.get('/returns/seller');
+      setSellerReturns(res.data.returns || []);
+    } catch (err) {
+      console.error('Error fetching seller returns:', err);
+      toast.error('Failed to load return requests');
+    } finally {
+      setReturnsLoading(false);
+    }
+  };
+
+  const handleSellerActOnReturn = async () => {
+    if (!returnActionModal) return;
+    setReturnActionSubmitting(true);
+    try {
+      await api.put(`/returns/seller/${returnActionModal.returnReq.id}`, {
+        action: returnActionModal.action,
+        seller_note: returnActionModal.note
+      });
+      toast.success(
+        returnActionModal.action === 'approve'
+          ? 'Return approved and inventory restocked!'
+          : 'Return request rejected'
+      );
+      setReturnActionModal(null);
+      fetchSellerReturns();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update return request');
+    } finally {
+      setReturnActionSubmitting(false);
+    }
+  };
+
+  const handleMarkPickupDone = async (returnId) => {
+    try {
+      await api.put(`/returns/seller/${returnId}/pickup-done`);
+      toast.success('Pickup marked as completed! Package collected.');
+      fetchSellerReturns();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to mark pickup');
+    }
+  };
+
   const fetchSellerData = async () => {
     setLoading(true);
     try {
