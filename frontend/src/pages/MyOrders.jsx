@@ -71,7 +71,7 @@ function OrderTimeline({ status }) {
 }
 
 export default function MyOrders() {
-  const { isLoggedIn, user, updateProfile } = useAuth();
+  const { isLoggedIn, user, updateProfile, logout } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loginModalOpen, setLoginModalOpen] = useState(!isLoggedIn);
@@ -283,27 +283,49 @@ export default function MyOrders() {
           </p>
         </div>
 
-        {/* Custom Tabs */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 30, borderBottom: '1px solid rgba(18,16,14,0.08)', paddingBottom: 16 }}>
+        {/* Custom Tabs + Sign Out Action */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 30, borderBottom: '1px solid rgba(18,16,14,0.08)', paddingBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => setActiveTab('orders')}
+              style={{
+                background: activeTab === 'orders' ? '#12100e' : 'transparent',
+                color: activeTab === 'orders' ? '#fff' : '#6b6560',
+                border: 'none', borderRadius: 999, padding: '8px 20px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              My Orders
+            </button>
+            <button
+              onClick={() => setActiveTab('security')}
+              style={{
+                background: activeTab === 'security' ? '#12100e' : 'transparent',
+                color: activeTab === 'security' ? '#fff' : '#6b6560',
+                border: 'none', borderRadius: 999, padding: '8px 20px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              Profile & Security
+            </button>
+          </div>
+
           <button
-            onClick={() => setActiveTab('orders')}
-            style={{
-              background: activeTab === 'orders' ? '#12100e' : 'transparent',
-              color: activeTab === 'orders' ? '#fff' : '#6b6560',
-              border: 'none', borderRadius: 999, padding: '8px 20px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
+            onClick={() => {
+              logout();
+              window.location.href = '/';
             }}
-          >
-            My Orders
-          </button>
-          <button
-            onClick={() => setActiveTab('security')}
             style={{
-              background: activeTab === 'security' ? '#12100e' : 'transparent',
-              color: activeTab === 'security' ? '#fff' : '#6b6560',
-              border: 'none', borderRadius: 999, padding: '8px 20px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'rgba(240,80,53,0.08)',
+              border: '1px solid rgba(240,80,53,0.2)',
+              borderRadius: 999, padding: '7px 16px',
+              fontSize: '0.78rem', fontWeight: 700, color: '#f05035',
+              cursor: 'pointer', transition: 'all 0.2s'
             }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(240,80,53,0.15)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(240,80,53,0.08)'}
           >
-            Profile & Security
+            <LogOut size={13} />
+            <span>Sign Out</span>
           </button>
         </div>
 

@@ -8,7 +8,7 @@ import {
   ShieldCheck, CheckCircle2, Truck, HelpCircle, User, Lock, Trash2, X, UploadCloud, 
   Video, Users, Menu, TrendingUp, Clock, Package, DollarSign, CreditCard, Layers, 
   Download, Check, LifeBuoy, MessageSquare, Search, Edit3, Phone, Mail, FileText,
-  RotateCcw
+  RotateCcw, LogOut
 } from 'lucide-react';
 import { Navigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -79,7 +79,12 @@ const VARIANT_DIMENSION_PRESETS = {
 };
 
 export default function SellerPanel() {
-  const { isLoggedIn, user, updateProfile } = useAuth();
+  const { isLoggedIn, user, updateProfile, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/seller/login';
+  };
   
   // States
   const [profile, setProfile] = useState(null);
@@ -968,6 +973,15 @@ export default function SellerPanel() {
                 </button>
               ))}
             </div>
+
+            <div className="p-3 border-t border-[rgba(91,33,182,0.08)] mt-auto bg-white/50">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 font-bold text-xs hover:bg-red-100 transition-colors cursor-pointer"
+              >
+                <LogOut size={14} /> Log Out
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -1031,10 +1045,16 @@ export default function SellerPanel() {
             ))}
           </div>
 
-          <div className="p-3 border-t border-[rgba(91,33,182,0.08)] relative z-10">
-            <Link to="/" className="w-full flex items-center gap-3 px-4 py-2 text-xs font-semibold text-[#9490b8] hover:text-[#5b21b6] transition-colors cursor-pointer">
+          <div className="p-3 border-t border-[rgba(91,33,182,0.08)] relative z-10 space-y-1">
+            <Link to="/" className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[#9490b8] hover:text-[#5b21b6] transition-colors rounded-xl hover:bg-[rgba(91,33,182,0.04)]">
               Exit to Store
             </Link>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 hover:text-red-700 transition-colors rounded-xl hover:bg-red-50 cursor-pointer"
+            >
+              <LogOut size={14} /> Sign Out
+            </button>
           </div>
         </div>
 
@@ -1047,13 +1067,21 @@ export default function SellerPanel() {
                 <p className="text-[10px] text-[#9490b8] font-medium mt-0.5">Slabofy Merchant Center</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-2.5 bg-[rgba(91,33,182,0.04)] border border-[rgba(91,33,182,0.1)] rounded-2xl px-3 py-2">
                 <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center text-white text-xs font-black">
                   {profile?.business_name?.charAt(0).toUpperCase() || 'M'}
                 </div>
                 <span className="text-xs font-bold text-[#12100e]">{profile?.business_name || 'Merchant'}</span>
               </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-red-600 bg-red-50/80 hover:bg-red-100 border border-red-200/60 rounded-2xl transition-colors cursor-pointer"
+                title="Sign out of seller account"
+              >
+                <LogOut size={13} />
+                <span>Sign Out</span>
+              </button>
             </div>
           </header>
 

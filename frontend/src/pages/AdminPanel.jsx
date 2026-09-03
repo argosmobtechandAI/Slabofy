@@ -7,12 +7,17 @@ import { Link, Navigate } from 'react-router-dom';
 import { 
   ShieldAlert, BarChart3, FolderHeart, Users, ListFilter, Percent, 
   Trash2, Check, X, RefreshCw, Plus, Calendar, AlertTriangle, ShieldCheck, Tag, Info, Package, Lock, Menu, TrendingUp, Clock, CheckCircle2,
-  LifeBuoy, HelpCircle, MessageSquare, Phone, Mail, FileText, RotateCcw, Truck, DollarSign
+  LifeBuoy, HelpCircle, MessageSquare, Phone, Mail, FileText, RotateCcw, Truck, DollarSign, LogOut
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function AdminPanel() {
-  const { isLoggedIn, role } = useAuth();
+  const { isLoggedIn, role, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/admin/login';
+  };
 
   // Navigation state
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'categories', 'sellers', 'products', 'coupons', 'customers', 'tickets'
@@ -394,6 +399,15 @@ export default function AdminPanel() {
                 </button>
               ))}
             </div>
+
+            <div className="p-3 border-t border-[rgba(91,33,182,0.08)] mt-auto bg-white/50">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 font-bold text-xs hover:bg-red-100 transition-colors cursor-pointer"
+              >
+                <LogOut size={14} /> Log Out
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -440,13 +454,22 @@ export default function AdminPanel() {
           </div>
 
           {/* Bottom user strip */}
-          <div className="p-3 border-t border-[rgba(91,33,182,0.08)] relative z-10">
-            <div className="flex items-center gap-3 p-3 rounded-2xl bg-[rgba(91,33,182,0.04)] border border-[rgba(91,33,182,0.08)]">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center text-white text-xs font-black">A</div>
-              <div>
-                <div className="text-xs font-bold text-[#12100e]">System Admin</div>
-                <div className="text-[9px] text-[#9490b8]">Full Access</div>
+          <div className="p-3 border-t border-[rgba(91,33,182,0.08)] relative z-10 space-y-2">
+            <div className="flex items-center justify-between p-2.5 rounded-2xl bg-[rgba(91,33,182,0.04)] border border-[rgba(91,33,182,0.08)]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center text-white text-xs font-black">A</div>
+                <div>
+                  <div className="text-xs font-bold text-[#12100e]">System Admin</div>
+                  <div className="text-[9px] text-[#9490b8]">Full Access</div>
+                </div>
               </div>
+              <button
+                onClick={handleLogout}
+                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                title="Log out of admin session"
+              >
+                <LogOut size={16} />
+              </button>
             </div>
           </div>
         </div>
@@ -469,6 +492,14 @@ export default function AdminPanel() {
                 <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center text-white text-xs font-black">A</div>
                 <span className="text-xs font-bold text-[#12100e]">Admin</span>
               </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-red-600 bg-red-50/80 hover:bg-red-100 border border-red-200/60 rounded-2xl transition-colors cursor-pointer"
+                title="Sign out of admin session"
+              >
+                <LogOut size={13} />
+                <span>Sign Out</span>
+              </button>
             </div>
           </header>
 

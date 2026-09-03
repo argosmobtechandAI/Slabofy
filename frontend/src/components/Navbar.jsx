@@ -4,14 +4,21 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { LogIn, LogOut, ShieldAlert, Store, User, Zap, ArrowUpRight, Menu, X, ShoppingBag } from 'lucide-react';
 import OTPLoginModal from './OTPLoginModal';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export default function Navbar() {
   const { isLoggedIn, user, logout } = useAuth();
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    setMobileMenuOpen(false);
+    navigate('/');
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -105,7 +112,7 @@ export default function Navbar() {
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#2d2926' }}>{user.name}</span>
                 </div>
                 <button
-                  onClick={logout}
+                  onClick={handleLogout}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '8px 16px', borderRadius: 100,
@@ -186,7 +193,7 @@ export default function Navbar() {
                     <div style={{ fontSize: '0.7rem', color: '#6b6560' }}>{user?.phone || user?.email}</div>
                   </div>
                 </div>
-                <button onClick={logout} style={{ background: 'rgba(240,80,53,0.1)', border: 'none', borderRadius: 10, padding: '6px 12px', color: '#f05035', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}>
+                <button onClick={handleLogout} style={{ background: 'rgba(240,80,53,0.1)', border: 'none', borderRadius: 10, padding: '6px 12px', color: '#f05035', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}>
                   Logout
                 </button>
               </div>
