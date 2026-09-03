@@ -40,20 +40,20 @@ app.get('/health', (req, res) => {
 });
 
 // Public categories endpoint (for listing forms)
-app.get('/api/categories', getCategories);
+app.get(['/api/categories', '/categories'], getCategories);
 
 // Bind Route Subsystems
-app.use('/api/auth', authRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/seller', sellerRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/groups', groupRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/coupons', couponRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/shiprocket', shiprocketRoutes);
-app.use('/api/tickets', ticketRoutes);
-app.use('/api/returns', returnsRoutes);
+app.use(['/api/auth', '/auth'], authRoutes);
+app.use(['/api/products', '/products'], productRoutes);
+app.use(['/api/seller', '/seller'], sellerRoutes);
+app.use(['/api/admin', '/admin'], adminRoutes);
+app.use(['/api/groups', '/groups'], groupRoutes);
+app.use(['/api/payments', '/payments'], paymentRoutes);
+app.use(['/api/coupons', '/coupons'], couponRoutes);
+app.use(['/api/upload', '/upload'], uploadRoutes);
+app.use(['/api/shiprocket', '/shiprocket'], shiprocketRoutes);
+app.use(['/api/tickets', '/tickets'], ticketRoutes);
+app.use(['/api/returns', '/returns'], returnsRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

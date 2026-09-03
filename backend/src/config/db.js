@@ -10,8 +10,13 @@ dotenv.config();
 const { Pool } = pg;
 
 const connectionString = process.env.DATABASE_URL;
-const isSupabaseOrCloud = connectionString && (
-  connectionString.includes('supabase') || 
+const isExplicitSslDisabled = connectionString && (
+  connectionString.includes('sslmode=disable') || 
+  connectionString.includes('slabofy.com') ||
+  process.env.DB_SSL === 'false'
+);
+const isSupabaseOrCloud = !isExplicitSslDisabled && connectionString && (
+  connectionString.includes('supabase.co') || 
   connectionString.includes('neon') || 
   connectionString.includes('aws') || 
   connectionString.includes('elephantsql') ||
