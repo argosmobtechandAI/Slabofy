@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import useScrollReveal from '../hooks/useScrollReveal';
 import { Link } from 'react-router-dom';
 import OTPLoginModal from '../components/OTPLoginModal';
+import InvoiceModal from '../components/InvoiceModal';
 
 const ORDER_STEPS = [
   { key: ['pending', 'confirmed', 'shipped', 'delivered'], label: 'Placed', icon: <ShoppingBag size={16} /> },
@@ -79,6 +80,9 @@ export default function MyOrders() {
   const [trackingModalOrder, setTrackingModalOrder] = useState(null);
   const [trackingData, setTrackingData] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
+
+  // Invoice Modal State
+  const [invoiceModalOrder, setInvoiceModalOrder] = useState(null);
 
   // Security Form State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -391,6 +395,39 @@ export default function MyOrders() {
                           </button>
                         </div>
                       )}
+
+                      {/* Official Tax Invoice Button */}
+                      <button
+                        type="button"
+                        onClick={() => setInvoiceModalOrder(order)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          padding: '9px 14px',
+                          borderRadius: 12,
+                          border: '1.5px solid rgba(91, 33, 182, 0.25)',
+                          background: '#ffffff',
+                          color: '#5b21b6',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          marginTop: 2
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(91, 33, 182, 0.08)';
+                          e.currentTarget.style.borderColor = '#5b21b6';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = '#ffffff';
+                          e.currentTarget.style.borderColor = 'rgba(91, 33, 182, 0.25)';
+                        }}
+                        title="View and Print Official GST Tax Invoice"
+                      >
+                        <FileText size={13} /> View / Print Tax Invoice
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -568,6 +605,14 @@ export default function MyOrders() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Official GST Tax Invoice Modal */}
+      {invoiceModalOrder && (
+        <InvoiceModal 
+          order={invoiceModalOrder} 
+          onClose={() => setInvoiceModalOrder(null)} 
+        />
       )}
     </div>
   );

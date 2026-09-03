@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Navigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import InvoiceModal from '../components/InvoiceModal';
 
 const PREDEFINED_COLORS = [
   { name: 'Red', hex: '#ef4444' },
@@ -183,6 +184,9 @@ export default function SellerPanel() {
   // Live Tracking Modal State
   const [trackingModalOrder, setTrackingModalOrder] = useState(null);
   const [trackingData, setTrackingData] = useState(null);
+
+  // Invoice Modal State
+  const [invoiceModalOrder, setInvoiceModalOrder] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
 
   // Security Form State
@@ -1169,6 +1173,14 @@ export default function SellerPanel() {
                         ) : (
                           <span className="bg-gray-100 text-[#12100e] border border-gray-200 text-[9px] font-bold px-2 py-0.5 rounded-full inline-block uppercase">{ord.status}</span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => setInvoiceModalOrder(ord)}
+                          className="text-[10px] text-[#5b21b6] font-bold hover:underline flex items-center gap-1 mt-1 cursor-pointer"
+                          title="View / Print Official GST Tax Invoice"
+                        >
+                          <FileText size={11} /> Invoice
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1596,6 +1608,14 @@ export default function SellerPanel() {
                             }`}>
                               {ord.shipment_status ? ord.shipment_status.replace('_', ' ') : ord.status}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => setInvoiceModalOrder(ord)}
+                              className="text-[10px] text-[#5b21b6] font-bold hover:underline flex items-center gap-1 mt-1 cursor-pointer"
+                              title="View / Print Official GST Tax Invoice"
+                            >
+                              <FileText size={10} /> Tax Invoice
+                            </button>
                           </td>
                         </tr>
                       );
@@ -2833,6 +2853,14 @@ export default function SellerPanel() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Official GST Tax Invoice Modal */}
+      {invoiceModalOrder && (
+        <InvoiceModal
+          order={invoiceModalOrder}
+          onClose={() => setInvoiceModalOrder(null)}
+        />
       )}
 
           </div>
