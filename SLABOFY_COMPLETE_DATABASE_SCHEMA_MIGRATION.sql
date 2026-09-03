@@ -429,7 +429,54 @@ CREATE INDEX IF NOT EXISTS idx_return_requests_status ON return_requests(status)
 
 
 -- ------------------------------------------------------------------------------
--- 17. SEED DATA (Default Categories, Admin Account & Starter Coupons)
+-- 17. RETROFIT & UPGRADE STATEMENTS FOR EXISTING PARTIAL DATABASES
+-- (Guarantees missing columns are added if tables already existed prior to migration)
+-- ------------------------------------------------------------------------------
+ALTER TABLE seller_profiles
+ADD COLUMN IF NOT EXISTS pickup_name VARCHAR(255),
+ADD COLUMN IF NOT EXISTS pickup_phone VARCHAR(20),
+ADD COLUMN IF NOT EXISTS pickup_address TEXT,
+ADD COLUMN IF NOT EXISTS pickup_city VARCHAR(100),
+ADD COLUMN IF NOT EXISTS pickup_state VARCHAR(100),
+ADD COLUMN IF NOT EXISTS pickup_pincode VARCHAR(10),
+ADD COLUMN IF NOT EXISTS pickup_country VARCHAR(50) DEFAULT 'India',
+ADD COLUMN IF NOT EXISTS shiprocket_pickup_id VARCHAR(100);
+
+ALTER TABLE products
+ADD COLUMN IF NOT EXISTS weight_kg DECIMAL(5,2) DEFAULT 0.50,
+ADD COLUMN IF NOT EXISTS length_cm DECIMAL(6,2) DEFAULT 10.00,
+ADD COLUMN IF NOT EXISTS breadth_cm DECIMAL(6,2) DEFAULT 10.00,
+ADD COLUMN IF NOT EXISTS height_cm DECIMAL(6,2) DEFAULT 5.00,
+ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0.00,
+ADD COLUMN IF NOT EXISTS reject_reason TEXT;
+
+ALTER TABLE orders
+ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(50),
+ADD COLUMN IF NOT EXISTS variant_id INT REFERENCES product_variants(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS color VARCHAR(100),
+ADD COLUMN IF NOT EXISTS size VARCHAR(50),
+ADD COLUMN IF NOT EXISTS is_cod BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS shipping_address TEXT,
+ADD COLUMN IF NOT EXISTS delivery_pincode VARCHAR(10),
+ADD COLUMN IF NOT EXISTS courier_name VARCHAR(255),
+ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(255),
+ADD COLUMN IF NOT EXISTS shiprocket_order_id VARCHAR(100),
+ADD COLUMN IF NOT EXISTS shiprocket_shipment_id VARCHAR(100),
+ADD COLUMN IF NOT EXISTS awb_code VARCHAR(100),
+ADD COLUMN IF NOT EXISTS courier_id INT,
+ADD COLUMN IF NOT EXISTS courier_name_sr VARCHAR(255),
+ADD COLUMN IF NOT EXISTS estimated_delivery DATE,
+ADD COLUMN IF NOT EXISTS shipping_charges DECIMAL(8,2) DEFAULT 0.00,
+ADD COLUMN IF NOT EXISTS shipment_status shipment_status DEFAULT 'pending';
+
+ALTER TABLE coupons
+ADD COLUMN IF NOT EXISTS uses INT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS uses_count INT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
+
+-- ------------------------------------------------------------------------------
+-- 18. SEED DATA (Default Categories, Admin Account & Starter Coupons)
 -- ------------------------------------------------------------------------------
 
 -- Default Marketplace Categories
