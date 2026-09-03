@@ -10,6 +10,7 @@ import {
   getProfile, 
   updateProfile, 
   getBuyerOrders,
+  getOrderInvoiceData,
   sellerSignup,
   changePassword,
   deleteAccount
@@ -28,10 +29,11 @@ router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 router.post('/seller/signup', sellerSignup);
 
-// Protected profile endpoints
+// Protected profile & orders endpoints
 router.get('/profile', verifyToken, getProfile);
 router.put('/profile', verifyToken, updateProfile);
 router.get('/orders', verifyToken, getBuyerOrders);
+router.get('/orders/:orderId/invoice', verifyToken, getOrderInvoiceData);
 
 // Security endpoints
 router.put('/change-password', verifyToken, changePassword);

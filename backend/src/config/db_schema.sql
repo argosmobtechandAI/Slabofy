@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS orders (
     unit_price DECIMAL(10,2) NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
     commission_pct DECIMAL(5,2) NOT NULL, -- Commission snapshotted at capture
+    coupon_code VARCHAR(50),
     variant_id INT REFERENCES product_variants(id) ON DELETE SET NULL,
     color VARCHAR(100),
     size VARCHAR(50),
@@ -170,6 +171,7 @@ CREATE TABLE IF NOT EXISTS coupons (
     discount_value DECIMAL(10,2) NOT NULL,
     expiry TIMESTAMPTZ NOT NULL,
     max_uses INT DEFAULT 100,
+    uses INT DEFAULT 0,
     uses_count INT DEFAULT 0,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()

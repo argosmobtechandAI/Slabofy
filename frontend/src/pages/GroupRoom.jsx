@@ -195,42 +195,42 @@ export default function GroupRoom() {
         </Link>
       </div>
 
-      <div ref={revealRef} className="scroll-reveal-group" style={{ maxWidth: 680, margin: '0 auto', padding: '24px 24px 64px' }}>
+      <div ref={revealRef} className="scroll-reveal-group" style={{ maxWidth: 680, margin: '0 auto', padding: '16px 16px 64px' }}>
 
         {/* Status Banner */}
         {group.status === 'complete' && (
-          <div style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(5,150,105,0.2)', borderRadius: 20, padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 28 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(5,150,105,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <CheckCircle size={22} color="#059669" />
+          <div style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(5,150,105,0.2)', borderRadius: 20, padding: '18px 20px', display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 24 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(5,150,105,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <CheckCircle size={20} color="#059669" />
             </div>
             <div>
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1rem', color: '#12100e', marginBottom: 4 }}>Co-Buying Team Completed! 🎉</div>
-              <div style={{ fontSize: '0.8rem', color: '#6b6560', lineHeight: 1.6 }}>All pre-authorized payments have been captured and orders are confirmed for merchant shipment.</div>
-              <Link to="/orders" style={{ display: 'inline-block', marginTop: 10, fontSize: '0.78rem', fontWeight: 700, color: '#5b21b6', textDecoration: 'none' }}>View My Orders →</Link>
+              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '0.95rem', color: '#12100e', marginBottom: 4 }}>Co-Buying Team Completed! 🎉</div>
+              <div style={{ fontSize: '0.78rem', color: '#6b6560', lineHeight: 1.6 }}>All pre-authorized payments have been captured and orders are confirmed for merchant shipment.</div>
+              <Link to="/orders" style={{ display: 'inline-block', marginTop: 8, fontSize: '0.75rem', fontWeight: 700, color: '#5b21b6', textDecoration: 'none' }}>View My Orders →</Link>
             </div>
           </div>
         )}
 
         {group.status === 'expired' && (
-          <div style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(240,80,53,0.2)', borderRadius: 20, padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 28 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(240,80,53,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <AlertTriangle size={22} color="#f05035" />
+          <div style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(240,80,53,0.2)', borderRadius: 20, padding: '18px 20px', display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 24 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(240,80,53,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <AlertTriangle size={20} color="#f05035" />
             </div>
             <div>
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1rem', color: '#12100e', marginBottom: 4 }}>Co-Buying Period Expired</div>
-              <div style={{ fontSize: '0.8rem', color: '#6b6560' }}>This deal didn't fill within 24 hours. All card pre-authorization holds have been safely voided.</div>
+              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '0.95rem', color: '#12100e', marginBottom: 4 }}>Co-Buying Period Expired</div>
+              <div style={{ fontSize: '0.78rem', color: '#6b6560' }}>This deal didn't fill within 24 hours. All card pre-authorization holds have been safely voided.</div>
             </div>
           </div>
         )}
 
         {group.status === 'cancelled' && (
-          <div style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(225,29,72,0.2)', borderRadius: 20, padding: '20px 24px', display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 28 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(225,29,72,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Ban size={22} color="#e11d48" />
+          <div style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(225,29,72,0.2)', borderRadius: 20, padding: '18px 20px', display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 24 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(225,29,72,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Ban size={20} color="#e11d48" />
             </div>
             <div>
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1rem', color: '#12100e', marginBottom: 4 }}>Group Cancelled</div>
-              <div style={{ fontSize: '0.8rem', color: '#6b6560' }}>This co-buying group was cancelled by the creator. All authorization holds have been released.</div>
+              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '0.95rem', color: '#12100e', marginBottom: 4 }}>Group Cancelled</div>
+              <div style={{ fontSize: '0.78rem', color: '#6b6560' }}>This co-buying group was cancelled by the creator. All authorization holds have been released.</div>
             </div>
           </div>
         )}
@@ -242,16 +242,16 @@ export default function GroupRoom() {
         }}>
 
           {/* Product header bar */}
-          <div style={{ background: 'linear-gradient(135deg, #f7f5fd, #fff)', borderBottom: '1px solid rgba(18,16,14,0.06)', padding: '28px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{ background: 'linear-gradient(135deg, #f7f5fd, #fff)', borderBottom: '1px solid rgba(18,16,14,0.06)', padding: '20px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 6 }}>
+              <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 4 }}>
                 CO-BUY DEAL ROOM
               </div>
-              <h1 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.2rem, 2.5vw, 1.6rem)', color: '#12100e', letterSpacing: '-0.03em', margin: 0 }}>
+              <h1 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: 'clamp(1.15rem, 2.5vw, 1.5rem)', color: '#12100e', letterSpacing: '-0.03em', margin: 0 }}>
                 {group.product_name}
               </h1>
               {group.tier_price && (
-                <div style={{ marginTop: 8, fontSize: '0.82rem', color: '#6b6560', fontWeight: 600 }}>
+                <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#6b6560', fontWeight: 600 }}>
                   Group Price: <span style={{ color: '#f59e0b', fontWeight: 800 }}>{fmt(group.tier_price)}</span>
                   {group.original_price && (
                     <span style={{ color: '#a09a94', textDecoration: 'line-through', marginLeft: 10, fontWeight: 500 }}>{fmt(group.original_price)}</span>
@@ -263,7 +263,7 @@ export default function GroupRoom() {
             {/* Circular Timer (active only) */}
             {group.status === 'active' && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <div style={{ position: 'relative', width: 64, height: 64, borderRadius: '50%', background: '#fff', boxShadow: '0 4px 16px rgba(18,16,14,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ position: 'relative', width: 60, height: 60, borderRadius: '50%', background: '#fff', boxShadow: '0 4px 16px rgba(18,16,14,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <CircularTimer remaining={timeLeft} total={STATUS_TOTAL} />
                   <div style={{ position: 'absolute', inset: -4, borderRadius: '50%', border: '1px solid rgba(91,33,182,0.1)', animation: 'pulse-ring 2s infinite' }} />
                 </div>
@@ -272,7 +272,7 @@ export default function GroupRoom() {
           </div>
 
           {/* Progress + Members body */}
-          <div style={{ padding: '32px 32px 28px' }}>
+          <div style={{ padding: '24px 20px' }}>
 
             {/* Progress bar */}
             <div style={{ marginBottom: 32 }}>

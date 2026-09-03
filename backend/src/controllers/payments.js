@@ -3,6 +3,7 @@ import Razorpay from 'razorpay';
 import { pool, redisClient } from '../config/db.js';
 import { sendWhatsApp } from '../utils/whatsapp.js';
 import { sendPush } from '../utils/push.js';
+import { checkServiceability } from '../utils/shiprocket.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,14 +19,13 @@ const razorpay = new Razorpay({
 
 const isRazorpayMock = !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.includes('YOURKEY');
 
-// List of allowed COD pincodes for testing
-const ALLOWED_COD_PINCODES = ['110001', '400001', '560001', '700001', '600001', '500001', '122001', '122018', '201301', '302001'];
+
 
 /**
  * BE-20: Create Razorpay Pre-Auth Order
  */
 export const createPaymentOrder = async (req, res) => {
-  const { group_id, product_id, target_size, shipping_address, coupon_code, variant_id, color, size } = req.body;
+  const { group_id, product_id, target_size, shipping_address, delivery_pincode, coupon_code, variant_id, color, size } = req.body;
   const buyerId = req.user.id;
 
   if (!shipping_address) {
@@ -65,8 +65,8 @@ export const createPaymentOrder = async (req, res) => {
     const unitPrice = parseFloat(tier.price);
     const totalAmount = unitPrice; // quantity is 1 for group buys
 
-    // Fetch product details for seller mapping
-    const productRes = await pool.query('SELECT seller_id, category_id FROM products WHERE id = $1', [finalProductId]);
+    // Fetch product details for seller mapping and delivery fee
+    const productRes = await pool.query('SELECT seller_id, category_id, COALESCE(delivery_fee, 0.00) as delivery_fee FROM products WHERE id = $1', [finalProductId]);
     const product = productRes.rows[0];
     if (!product) {
       return res.status(404).json({ error: 'Product not found' });
@@ -82,8 +82,8 @@ export const createPaymentOrder = async (req, res) => {
     if (coupon_code) {
       const couponRes = await pool.query('SELECT * FROM coupons WHERE code = $1 AND is_active = true', [coupon_code.toUpperCase().trim()]);
       const coupon = couponRes.rows[0];
-      if (coupon) {
-        if (new Date(coupon.expiry) >= new Date() && coupon.uses < coupon.max_uses) {
+        const currentUses = coupon.uses_count !== undefined ? coupon.uses_count : (coupon.uses || 0);
+        if (new Date(coupon.expiry) >= new Date() && currentUses < (coupon.max_uses || 100)) {
           appliedCouponCode = coupon.code;
           let discount = 0;
           if (coupon.discount_type === 'flat') {
@@ -93,8 +93,11 @@ export const createPaymentOrder = async (req, res) => {
           }
           finalAmount = Math.max(1.00, totalAmount - discount); // Razorpay requires at least 1 Paise/INR
         }
-      }
     }
+
+    // Add admin-configured delivery fee to the final amount (if any)
+    const deliveryFee = parseFloat(product.delivery_fee || 0);
+    finalAmount = +(finalAmount + deliveryFee).toFixed(2);
 
     // 3. Call Razorpay API to create order (Pre-Auth hold mode: payment_capture = 0)
     let razorpayOrder;
@@ -104,7 +107,7 @@ export const createPaymentOrder = async (req, res) => {
         amount: Math.round(finalAmount * 100),
         currency: 'INR'
       };
-      console.log(`[MOCK RAZORPAY ORDER] Created: ${razorpayOrder.id} | Amount: ${finalAmount}`);
+      console.log(`[MOCK RAZORPAY ORDER] Created: ${razorpayOrder.id} | Amount: ${finalAmount} (Delivery fee: ${deliveryFee})`);
     } else {
       razorpayOrder = await razorpay.orders.create({
         amount: Math.round(finalAmount * 100), // in Paise
@@ -114,10 +117,13 @@ export const createPaymentOrder = async (req, res) => {
       });
     }
 
+    // Extract pincode if not sent separately
+    const extractedPincode = delivery_pincode || (shipping_address.match(/\b\d{6}\b/) ? shipping_address.match(/\b\d{6}\b/)[0] : '110001');
+
     // 4. Create pending order in PostgreSQL database
     const insertOrderQuery = `
-      INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, razorpay_order_id, is_cod, shipping_address, coupon_code, variant_id, color, size)
-      VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'pending', $8, false, $9, $10, $11, $12, $13)
+      INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, razorpay_order_id, is_cod, shipping_address, delivery_pincode, coupon_code, variant_id, color, size, shipping_charges)
+      VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'pending', $8, false, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `;
     const orderResult = await pool.query(insertOrderQuery, [
@@ -130,10 +136,12 @@ export const createPaymentOrder = async (req, res) => {
       commissionPct,
       razorpayOrder.id,
       shipping_address,
+      extractedPincode,
       appliedCouponCode,
       variant_id || null,
       color || null,
-      size || null
+      size || null,
+      deliveryFee
     ]);
 
     return res.status(201).json({
@@ -191,7 +199,7 @@ export const verifyPaymentSignature = async (req, res) => {
 
     // Increment coupon uses if applied
     if (order.coupon_code) {
-      await client.query('UPDATE coupons SET uses = uses + 1 WHERE code = $1', [order.coupon_code]);
+      await client.query('UPDATE coupons SET uses_count = COALESCE(uses_count, 0) + 1 WHERE code = $1', [order.coupon_code]);
     }
 
     // Decrement stock upon pre-authorization
@@ -395,16 +403,17 @@ export const handleRazorpayWebhook = async (req, res) => {
  * BE-24: Cash on Delivery (COD) Flow
  */
 export const createCodOrder = async (req, res) => {
-  const { group_id, product_id, target_size, shipping_address, pincode, coupon_code, variant_id, color, size } = req.body;
+  const { group_id, product_id, target_size, shipping_address, pincode, delivery_pincode, coupon_code, variant_id, color, size } = req.body;
   const buyerId = req.user.id;
 
-  if (!shipping_address || !pincode) {
+  const rawPincode = pincode || delivery_pincode;
+  if (!shipping_address || !rawPincode) {
     return res.status(400).json({ error: 'Shipping address and pincode are required' });
   }
 
-  // Validate pincode against allowed list
-  if (!ALLOWED_COD_PINCODES.includes(pincode.trim())) {
-    return res.status(400).json({ error: 'Cash on Delivery (COD) is not available for this pincode' });
+  const cleanPincode = rawPincode.toString().trim();
+  if (cleanPincode.length !== 6 || isNaN(cleanPincode)) {
+    return res.status(400).json({ error: 'Invalid 6-digit delivery pincode' });
   }
 
   let finalProductId = product_id;
@@ -441,8 +450,42 @@ export const createCodOrder = async (req, res) => {
     }
     const unitPrice = parseFloat(tier.price);
 
-    const productRes = await client.query('SELECT seller_id, category_id FROM products WHERE id = $1', [finalProductId]);
+    const productRes = await client.query(`
+      SELECT p.seller_id, p.category_id, COALESCE(p.weight_kg, 0.50) as weight_kg,
+             COALESCE(p.delivery_fee, 0.00) as delivery_fee,
+             sp.pickup_pincode
+      FROM products p
+      LEFT JOIN seller_profiles sp ON p.seller_id = sp.user_id
+      WHERE p.id = $1
+    `, [finalProductId]);
     const product = productRes.rows[0];
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    // Dynamic Shiprocket Serviceability & COD Verification
+    const sellerPickupPincode = product.pickup_pincode || '110001';
+    try {
+      const srvRes = await checkServiceability({
+        pickup_postcode: sellerPickupPincode,
+        delivery_postcode: cleanPincode,
+        weight: parseFloat(product.weight_kg || 0.5),
+        cod: 1
+      });
+      const couriers = srvRes?.data?.available_courier_companies || [];
+      const isCodSupported = couriers.some(c => c.cod === 1);
+
+      if (couriers.length === 0) {
+        return res.status(400).json({ error: `Delivery to pincode ${cleanPincode} is currently unserviceable by our courier network` });
+      }
+      if (!isCodSupported) {
+        return res.status(400).json({ error: `Cash on Delivery (COD) is not available for pincode ${cleanPincode}. Please choose Prepaid.` });
+      }
+    } catch (checkErr) {
+      // Shiprocket API unreachable — log and allow through (non-blocking)
+      console.warn('[SHIPROCKET COD CHECK] Serviceability check failed, allowing order through:', checkErr.message || checkErr);
+    }
+
     const catRes = await client.query('SELECT commission_pct FROM categories WHERE id = $1', [product.category_id]);
     const commissionPct = catRes.rows[0]?.commission_pct || 5.00;
 
@@ -453,21 +496,26 @@ export const createCodOrder = async (req, res) => {
       const couponRes = await client.query('SELECT * FROM coupons WHERE code = $1 AND is_active = true', [coupon_code.toUpperCase().trim()]);
       const coupon = couponRes.rows[0];
       if (coupon) {
-        if (new Date(coupon.expiry) >= new Date() && coupon.uses < coupon.max_uses) {
+        const currentUses = coupon.uses_count !== undefined ? coupon.uses_count : (coupon.uses || 0);
+        if (new Date(coupon.expiry) >= new Date() && currentUses < (coupon.max_uses || 100)) {
           appliedCouponCode = coupon.code;
           let discount = 0;
           if (coupon.discount_type === 'flat') {
-            discount = parseFloat(coupon.discount_value);
+              discount = parseFloat(coupon.discount_value);
           } else if (coupon.discount_type === 'pct') {
             discount = (unitPrice * parseFloat(coupon.discount_value)) / 100;
           }
           finalAmount = Math.max(0.00, unitPrice - discount);
           
           // Increment uses immediately for COD
-          await client.query('UPDATE coupons SET uses = uses + 1 WHERE code = $1', [coupon.code]);
+          await client.query('UPDATE coupons SET uses_count = COALESCE(uses_count, 0) + 1 WHERE code = $1', [coupon.code]);
         }
       }
     }
+
+    // Add admin-configured delivery fee
+    const deliveryFee = parseFloat(product.delivery_fee || 0);
+    finalAmount = +(finalAmount + deliveryFee).toFixed(2);
 
     // 2. COD Order creation (Status set to 'confirmed' directly because it skips pre-auth)
     // 3. Update Group Buying State
@@ -487,8 +535,8 @@ export const createCodOrder = async (req, res) => {
 
       // Create confirmed order
       const insertOrderQuery = `
-        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, coupon_code, variant_id, color, size)
-        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12)
+        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, delivery_pincode, coupon_code, variant_id, color, size, shipping_charges)
+        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
       `;
       const orderRes = await client.query(insertOrderQuery, [
@@ -499,11 +547,13 @@ export const createCodOrder = async (req, res) => {
         unitPrice,
         finalAmount,
         commissionPct,
-        `${shipping_address} (Pincode: ${pincode})`,
+        shipping_address,
+        cleanPincode,
         appliedCouponCode,
         variant_id || null,
         color || null,
-        size || null
+        size || null,
+        deliveryFee
       ]);
 
       // Decrement stock for COD
@@ -549,8 +599,8 @@ export const createCodOrder = async (req, res) => {
       await client.query('UPDATE groups SET current_size = $1 WHERE id = $2', [updatedSize, group_id]);
 
       const insertOrderQuery = `
-        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, coupon_code, variant_id, color, size)
-        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12)
+        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, delivery_pincode, coupon_code, variant_id, color, size, shipping_charges)
+        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
       `;
       const orderRes = await client.query(insertOrderQuery, [
@@ -561,11 +611,13 @@ export const createCodOrder = async (req, res) => {
         unitPrice,
         finalAmount,
         commissionPct,
-        `${shipping_address} (Pincode: ${pincode})`,
+        shipping_address,
+        cleanPincode,
         appliedCouponCode,
         variant_id || null,
         color || null,
-        size || null
+        size || null,
+        deliveryFee
       ]);
 
       // Decrement stock for COD

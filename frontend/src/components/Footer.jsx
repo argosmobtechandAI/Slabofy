@@ -28,17 +28,15 @@ export default function Footer() {
       <div className="blob" style={{ position: 'absolute', bottom: '-20%', right: '-5%', width: 400, height: 400, background: 'radial-gradient(circle, rgba(91,33,182,0.06) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div className="blob blob-delay-2" style={{ position: 'absolute', top: '10%', left: '-10%', width: 300, height: 300, background: 'radial-gradient(circle, rgba(240,80,53,0.04) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ height: 2, background: 'linear-gradient(90deg, transparent, #5b21b6, #f05035, #f59e0b, transparent)' }} />
-      <div style={{ maxWidth: 1320, margin: '0 auto', padding: '60px 24px 40px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 48, marginBottom: 52 }}>
+      <div style={{ maxWidth: 1320, margin: '0 auto', padding: '48px 16px 32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 36, marginBottom: 40 }}>
           <div>
             <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #5b21b6, #f05035)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: '#fff', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.1rem' }}>S</span>
-              </div>
-              <div>
-                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.05rem', color: '#12100e', letterSpacing: '-0.03em' }}>Slab<span style={{ color: '#f05035' }}>ofy</span></div>
-                <div style={{ fontSize: '0.6rem', fontWeight: 600, color: '#6b6560', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Group Buying</div>
-              </div>
+              <img
+                src="/slabofy-logo.png"
+                alt="Slabofy — Buy Together. Save Together."
+                style={{ height: 44, width: 'auto', objectFit: 'contain' }}
+              />
             </Link>
             <p style={{ fontSize: '0.82rem', color: '#6b6560', lineHeight: 1.75, maxWidth: 240, marginBottom: 28 }}>
               Form buying teams. Unlock wholesale tier discounts. The smarter way to shop together.
@@ -56,8 +54,8 @@ export default function Footer() {
 
           <div>
             <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 20 }}>Discover</div>
-            {[{ to: '/', label: 'Browse Deals' }, { to: '/orders', label: 'My Orders' }].map(({ to, label }) => (
-              <Link key={to} to={to} style={{ display: 'block', color: '#a09a94', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500, marginBottom: 12, transition: 'color 0.2s' }}
+            {[{ to: '/', label: 'Browse Deals' }, { to: '/orders', label: 'My Orders' }, { to: '/orders', label: 'Track Your Orders' }].map(({ to, label }) => (
+              <Link key={label} to={to} style={{ display: 'block', color: '#a09a94', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500, marginBottom: 12, transition: 'color 0.2s' }}
                 onMouseEnter={e => e.currentTarget.style.color = '#5b21b6'}
                 onMouseLeave={e => e.currentTarget.style.color = '#a09a94'}>{label}</Link>
             ))}
@@ -65,7 +63,7 @@ export default function Footer() {
 
           <div>
             <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#6b6560', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 20 }}>For Sellers</div>
-            {[{ to: '/seller', label: 'Seller Dashboard' }, { to: '/seller', label: 'List a Product' }, { to: '/seller', label: 'Track Your Orders' }].map(({ to, label }) => (
+            {[{ to: '/seller', label: 'Seller Dashboard' }, { to: '/seller', label: 'List a Product' }, { to: '/seller/login', label: 'Merchant Onboarding' }].map(({ to, label }) => (
               <Link key={label} to={to} style={{ display: 'block', color: '#a09a94', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500, marginBottom: 12, transition: 'color 0.2s' }}
                 onMouseEnter={e => e.currentTarget.style.color = '#5b21b6'}
                 onMouseLeave={e => e.currentTarget.style.color = '#a09a94'}>{label}</Link>

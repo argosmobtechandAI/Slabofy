@@ -250,11 +250,11 @@ export default function OTPLoginModal({ isOpen, onClose }) {
           transform: 'translate(-50%, -50%)',
           width: '92%',
           maxWidth: 460,
-          maxHeight: '90vh',
+          maxHeight: '92vh',
           overflowY: 'auto',
           background: '#ffffff',
-          borderRadius: 28,
-          padding: 36,
+          borderRadius: 24,
+          padding: 'clamp(20px, 5vw, 32px)',
           boxShadow: '0 32px 100px rgba(30,27,75,0.2), 0 8px 30px rgba(99,102,241,0.15)',
           border: '1px solid rgba(99,102,241,0.15)',
           zIndex: 10000,
@@ -282,6 +282,15 @@ export default function OTPLoginModal({ isOpen, onClose }) {
         >
           <X size={16} />
         </button>
+
+        {/* Brand Logo Header */}
+        <div className="flex justify-center mb-6">
+          <img
+            src="/slabofy-logo.png"
+            alt="Slabofy — Buy Together. Save Together."
+            style={{ height: 38, width: 'auto', objectFit: 'contain' }}
+          />
+        </div>
 
         {/* Google SSO Chooser view */}
         {googleChooserOpen ? (

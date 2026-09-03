@@ -9,6 +9,9 @@ import groupRoutes from './routes/groups.js';
 import paymentRoutes from './routes/payments.js';
 import couponRoutes from './routes/coupons.js';
 import uploadRoutes from './routes/upload.js';
+import shiprocketRoutes from './routes/shiprocket.js';
+import ticketRoutes from './routes/tickets.js';
+import returnsRoutes from './routes/returns.js';
 import { getCategories } from './controllers/admin.js';
 import path from 'path';
 import { initExpiryCron } from './cron/expiry.js';
@@ -21,11 +24,12 @@ const PORT = process.env.PORT || 5000;
 // Enable CORS for frontend connection (typically running on Vite port 5173)
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serve static uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
@@ -36,17 +40,20 @@ app.get('/health', (req, res) => {
 });
 
 // Public categories endpoint (for listing forms)
-app.get('/api/categories', getCategories);
+app.get(['/api/categories', '/categories'], getCategories);
 
 // Bind Route Subsystems
-app.use('/api/auth', authRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/seller', sellerRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/groups', groupRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/coupons', couponRoutes);
-app.use('/api/upload', uploadRoutes);
+app.use(['/api/auth', '/auth'], authRoutes);
+app.use(['/api/products', '/products'], productRoutes);
+app.use(['/api/seller', '/seller'], sellerRoutes);
+app.use(['/api/admin', '/admin'], adminRoutes);
+app.use(['/api/groups', '/groups'], groupRoutes);
+app.use(['/api/payments', '/payments'], paymentRoutes);
+app.use(['/api/coupons', '/coupons'], couponRoutes);
+app.use(['/api/upload', '/upload'], uploadRoutes);
+app.use(['/api/shiprocket', '/shiprocket'], shiprocketRoutes);
+app.use(['/api/tickets', '/tickets'], ticketRoutes);
+app.use(['/api/returns', '/returns'], returnsRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

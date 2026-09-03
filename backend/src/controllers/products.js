@@ -8,7 +8,11 @@ export const createProduct = async (req, res) => {
     name, description, images, videos, category_id,
     sku, stock, tiers, variants,
     max_group_size,
-    group_window_hours
+    group_window_hours,
+    weight_kg,
+    length_cm,
+    breadth_cm,
+    height_cm
   } = req.body;
   const sellerId = req.user.id;
 
@@ -91,11 +95,12 @@ export const createProduct = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Create product
+    // Create product with Shiprocket package dimensions
     const productQuery = `
       INSERT INTO products 
-        (seller_id, category_id, name, description, images, videos, sku, stock, status, max_group_size, group_window_hours)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
+        (seller_id, category_id, name, description, images, videos, sku, stock, status, max_group_size, group_window_hours,
+         weight_kg, length_cm, breadth_cm, height_cm)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, $14)
       RETURNING *
     `;
     const productVal = [
@@ -108,7 +113,11 @@ export const createProduct = async (req, res) => {
       sku || null,
       stock,
       parsedMaxGroupSize,
-      parsedWindowHours
+      parsedWindowHours,
+      parseFloat(weight_kg) || 0.50,
+      parseFloat(length_cm) || 10.00,
+      parseFloat(breadth_cm) || 10.00,
+      parseFloat(height_cm) || 5.00
     ];
     const productResult = await client.query(productQuery, productVal);
     const newProduct = productResult.rows[0];
@@ -159,27 +168,56 @@ export const createProduct = async (req, res) => {
  */
 export const editProduct = async (req, res) => {
   const { id } = req.params;
-  const { description, images, stock } = req.body;
+  const {
+    name, category_id, sku, description, images, stock,
+    weight_kg, length_cm, breadth_cm, height_cm,
+    max_group_size, group_window_hours,
+    tiers, variants
+  } = req.body;
   const sellerId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
 
+  const client = await pool.connect();
   try {
     // 1. Verify product ownership
-    const productCheck = await pool.query(
+    const productCheck = await client.query(
       'SELECT id, seller_id FROM products WHERE id = $1',
       [id]
     );
     const product = productCheck.rows[0];
     if (!product) {
+      client.release();
       return res.status(404).json({ error: 'Product not found' });
     }
-    if (product.seller_id !== sellerId) {
+    if (product.seller_id !== sellerId && !isAdmin) {
+      client.release();
       return res.status(403).json({ error: 'Access Denied: Product ownership mismatch' });
     }
 
-    // 2. Perform updates
+    await client.query('BEGIN');
+
+    // 2. Perform updates on products table
     let updateFields = [];
     let queryParams = [];
     let paramIndex = 1;
+
+    if (name !== undefined) {
+      updateFields.push(`name = $${paramIndex}`);
+      queryParams.push(name);
+      paramIndex++;
+    }
+
+    if (category_id !== undefined) {
+      updateFields.push(`category_id = $${paramIndex}`);
+      queryParams.push(category_id ? parseInt(category_id) : null);
+      paramIndex++;
+    }
+
+    if (sku !== undefined) {
+      updateFields.push(`sku = $${paramIndex}`);
+      queryParams.push(sku);
+      paramIndex++;
+    }
 
     if (description !== undefined) {
       updateFields.push(`description = $${paramIndex}`);
@@ -195,23 +233,115 @@ export const editProduct = async (req, res) => {
 
     if (stock !== undefined) {
       updateFields.push(`stock = $${paramIndex}`);
-      queryParams.push(stock);
+      queryParams.push(parseInt(stock) || 0);
       paramIndex++;
     }
 
-    if (updateFields.length === 0) {
-      return res.status(400).json({ error: 'No update fields provided' });
+    if (max_group_size !== undefined) {
+      updateFields.push(`max_group_size = $${paramIndex}`);
+      queryParams.push(parseInt(max_group_size));
+      paramIndex++;
     }
 
-    queryParams.push(id);
-    const query = `UPDATE products SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-    const updated = await pool.query(query, queryParams);
+    if (group_window_hours !== undefined) {
+      updateFields.push(`group_window_hours = $${paramIndex}`);
+      queryParams.push(parseInt(group_window_hours));
+      paramIndex++;
+    }
+
+    if (weight_kg !== undefined) {
+      updateFields.push(`weight_kg = $${paramIndex}`);
+      queryParams.push(parseFloat(weight_kg) || 0.50);
+      paramIndex++;
+    }
+
+    if (length_cm !== undefined) {
+      updateFields.push(`length_cm = $${paramIndex}`);
+      queryParams.push(parseFloat(length_cm) || 10.00);
+      paramIndex++;
+    }
+
+    if (breadth_cm !== undefined) {
+      updateFields.push(`breadth_cm = $${paramIndex}`);
+      queryParams.push(parseFloat(breadth_cm) || 10.00);
+      paramIndex++;
+    }
+
+    if (height_cm !== undefined) {
+      updateFields.push(`height_cm = $${paramIndex}`);
+      queryParams.push(parseFloat(height_cm) || 5.00);
+      paramIndex++;
+    }
+
+    if (updateFields.length > 0) {
+      queryParams.push(id);
+      const query = `UPDATE products SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`;
+      await client.query(query, queryParams);
+    }
+
+    // 3. Update Tiers if provided
+    if (tiers && Array.isArray(tiers) && tiers.length > 0) {
+      const parsedTiers = tiers.map(t => ({
+        group_size: parseInt(t.group_size),
+        price: parseFloat(t.price)
+      })).filter(t => !isNaN(t.group_size) && !isNaN(t.price) && t.price > 0);
+
+      if (!parsedTiers.some(t => t.group_size === 1)) {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(400).json({ error: 'A solo tier (group_size = 1) is required' });
+      }
+
+      // Delete existing tiers and insert updated
+      await client.query('DELETE FROM product_tiers WHERE product_id = $1', [id]);
+      for (const t of parsedTiers) {
+        await client.query(
+          'INSERT INTO product_tiers (product_id, group_size, price) VALUES ($1, $2, $3)',
+          [id, t.group_size, t.price]
+        );
+      }
+    }
+
+    // 4. Update Variants if provided
+    if (variants && Array.isArray(variants)) {
+      await client.query('DELETE FROM product_variants WHERE product_id = $1', [id]);
+      for (const v of variants) {
+        if (v.color || v.size) {
+          await client.query(
+            'INSERT INTO product_variants (product_id, color, size, stock, image_url) VALUES ($1, $2, $3, $4, $5)',
+            [id, v.color || 'Default', v.size || 'Default', parseInt(v.stock) || 0, v.image_url || null]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    // Fetch updated product with tiers and variants
+    const updatedRes = await client.query(`
+      SELECT p.*, c.name as category_name,
+             COALESCE((
+               SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price) ORDER BY pt.group_size ASC)
+               FROM product_tiers pt WHERE pt.product_id = p.id
+             ), '[]'::json) as tiers,
+             COALESCE((
+               SELECT json_agg(json_build_object('id', pv.id, 'color', pv.color, 'size', pv.size, 'stock', pv.stock, 'image_url', pv.image_url))
+               FROM product_variants pv WHERE pv.product_id = p.id
+             ), '[]'::json) as variants
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.id = $1
+    `, [id]);
+
+    client.release();
 
     return res.status(200).json({
       message: 'Product updated successfully',
-      product: updated.rows[0]
+      product: updatedRes.rows[0]
     });
   } catch (error) {
+    await client.query('ROLLBACK');
+    client.release();
     console.error('Error in editProduct:', error.message);
     return res.status(500).json({ error: 'Server error editing product' });
   }
@@ -227,21 +357,21 @@ export const getProducts = async (req, res) => {
   try {
     let queryParams = [];
     let paramIndex = 1;
-    let whereClauses = ["status = 'active'"];
+    let whereClauses = ["p.status = 'active'"];
 
     if (category_id) {
-      whereClauses.push(`category_id = $${paramIndex}`);
+      whereClauses.push(`p.category_id = $${paramIndex}`);
       queryParams.push(category_id);
       paramIndex++;
     }
 
-    if (search) {
-      whereClauses.push(`(name ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`);
-      queryParams.push(`%${search}%`);
+    if (search && search.trim()) {
+      whereClauses.push(`(p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex} OR p.sku ILIKE $${paramIndex} OR c.name ILIKE $${paramIndex})`);
+      queryParams.push(`%${search.trim()}%`);
       paramIndex++;
     }
 
-    let orderByClause = 'ORDER BY created_at DESC';
+    let orderByClause = 'ORDER BY p.created_at DESC';
     if (sort_by === 'price_asc') {
       orderByClause = 'ORDER BY best_price ASC';
     } else if (sort_by === 'price_desc') {
@@ -253,12 +383,18 @@ export const getProducts = async (req, res) => {
     // Query fetching products along with their pricing tiers aggregated, plus the group-10 price (best price)
     const query = `
       SELECT p.*, c.name as category_name,
-             (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = 1) as solo_price,
-             (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = p.max_group_size) as best_price,
-             (
-               SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price))
+             COALESCE(
+               (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size = 1 LIMIT 1),
+               (SELECT price FROM product_tiers WHERE product_id = p.id ORDER BY group_size ASC LIMIT 1)
+             ) as solo_price,
+             COALESCE(
+               (SELECT price FROM product_tiers WHERE product_id = p.id AND group_size > 1 ORDER BY price ASC LIMIT 1),
+               (SELECT price FROM product_tiers WHERE product_id = p.id ORDER BY price ASC LIMIT 1)
+             ) as best_price,
+             COALESCE((
+               SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price) ORDER BY pt.group_size ASC)
                FROM product_tiers pt WHERE pt.product_id = p.id
-             ) as tiers,
+             ), '[]'::json) as tiers,
              (
                SELECT COUNT(*)::int 
                FROM groups g 
@@ -276,7 +412,7 @@ export const getProducts = async (req, res) => {
     const productsResult = await pool.query(query, queryParams);
 
     // Total count for pagination
-    const countQuery = `SELECT COUNT(*) FROM products p ${whereQuery}`;
+    const countQuery = `SELECT COUNT(*) FROM products p LEFT JOIN categories c ON p.category_id = c.id ${whereQuery}`;
     const totalCountResult = await pool.query(countQuery, queryParams.slice(0, paramIndex - 1));
     const totalProducts = parseInt(totalCountResult.rows[0].count);
 
@@ -304,10 +440,10 @@ export const getProductDetail = async (req, res) => {
   try {
     const productQuery = `
       SELECT p.*, c.name as category_name,
-             (
+             COALESCE((
                SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price) ORDER BY pt.group_size ASC)
                FROM product_tiers pt WHERE pt.product_id = p.id
-             ) as tiers,
+             ), '[]'::json) as tiers,
              COALESCE((
                SELECT json_agg(json_build_object('id', pv.id, 'color', pv.color, 'size', pv.size, 'stock', pv.stock, 'image_url', pv.image_url))
                FROM product_variants pv WHERE pv.product_id = p.id

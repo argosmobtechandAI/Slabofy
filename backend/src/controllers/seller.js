@@ -5,7 +5,10 @@ import { sendEmail } from '../utils/email.js';
  * BE-06: Seller Registration Onboarding
  */
 export const registerSeller = async (req, res) => {
-  const { business_name, gstin, bank_account, ifsc } = req.body;
+  const { 
+    business_name, business_type, business_address, gstin, bank_account, ifsc,
+    pickup_name, pickup_phone, pickup_address, pickup_city, pickup_state, pickup_pincode, pickup_country
+  } = req.body;
   const userId = req.user.id;
 
   if (!business_name) {
@@ -19,13 +22,30 @@ export const registerSeller = async (req, res) => {
       return res.status(400).json({ error: 'Seller profile already exists for this account' });
     }
 
-    // Insert new profile
+    // Insert new profile with pickup address
     const insertQuery = `
-      INSERT INTO seller_profiles (user_id, business_name, gstin, bank_account, ifsc, is_approved)
-      VALUES ($1, $2, $3, $4, $5, false)
+      INSERT INTO seller_profiles 
+      (user_id, business_name, business_type, business_address, gstin, bank_account, ifsc, 
+       pickup_name, pickup_phone, pickup_address, pickup_city, pickup_state, pickup_pincode, pickup_country, is_approved)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, false)
       RETURNING *
     `;
-    const result = await pool.query(insertQuery, [userId, business_name, gstin || null, bank_account || null, ifsc || null]);
+    const result = await pool.query(insertQuery, [
+      userId, 
+      business_name, 
+      business_type || 'Proprietorship', 
+      business_address || null, 
+      gstin || null, 
+      bank_account || null, 
+      ifsc || null,
+      pickup_name || null,
+      pickup_phone || null,
+      pickup_address || business_address || null,
+      pickup_city || null,
+      pickup_state || null,
+      pickup_pincode || null,
+      pickup_country || 'India'
+    ]);
     
     // Notify Admin via email (Mock)
     await sendEmail(
@@ -94,7 +114,7 @@ export const getSellerStats = async (req, res) => {
 };
 
 /**
- * BE-11: Seller Order Management (Fetch)
+ * BE-11: Seller Order Management (Fetch with Shiprocket Details)
  */
 export const getSellerOrders = async (req, res) => {
   const sellerId = req.user.id;
@@ -103,7 +123,11 @@ export const getSellerOrders = async (req, res) => {
   try {
     let query = `
       SELECT o.*, p.name as product_name, p.sku as product_sku,
-             u.name as buyer_name, u.phone as buyer_phone,
+             COALESCE(p.weight_kg, 0.50) as product_weight_kg,
+             COALESCE(p.length_cm, 10.00) as product_length_cm,
+             COALESCE(p.breadth_cm, 10.00) as product_breadth_cm,
+             COALESCE(p.height_cm, 5.00) as product_height_cm,
+             u.name as buyer_name, u.phone as buyer_phone, u.email as buyer_email,
              g.target_size as group_target_size, g.current_size as group_current_size, g.status as group_status
       FROM orders o
       JOIN products p ON o.product_id = p.id
@@ -129,7 +153,7 @@ export const getSellerOrders = async (req, res) => {
 };
 
 /**
- * BE-11: Seller Order Ship (Shipment Dispatch Update)
+ * BE-11: Seller Order Ship (Legacy fallback handler)
  */
 export const shipOrder = async (req, res) => {
   const { id } = req.params;
@@ -161,14 +185,12 @@ export const shipOrder = async (req, res) => {
     // 2. Update order to shipped
     const updateQuery = `
       UPDATE orders 
-      SET status = 'shipped', courier_name = $1, tracking_number = $2 
+      SET status = 'shipped', courier_name = $1, tracking_number = $2,
+          courier_name_sr = $1, awb_code = $2, shipment_status = 'pickup_scheduled'
       WHERE id = $3 
       RETURNING *
     `;
     const result = await pool.query(updateQuery, [courier_name, tracking_number, id]);
-
-    // Send shipment notification to buyer (email mock / push mock)
-    // await sendEmail(buyer.email, 'Your order has been shipped!', 'order_shipped', { tracking_number })
 
     return res.status(200).json({
       message: 'Order shipped successfully',
@@ -189,6 +211,8 @@ export const getSellerProfile = async (req, res) => {
     const query = `
       SELECT u.name, u.email, u.phone, u.role, u.is_verified, u.created_at,
              sp.business_name, sp.business_type, sp.business_address,
+             sp.pickup_name, sp.pickup_phone, sp.pickup_address, sp.pickup_city,
+             sp.pickup_state, sp.pickup_pincode, sp.pickup_country, sp.shiprocket_pickup_id,
              sp.gstin, sp.pan_number, sp.aadhar_number, sp.bank_account, sp.ifsc,
              sp.kyc_document_url, sp.is_approved
       FROM users u
@@ -202,3 +226,105 @@ export const getSellerProfile = async (req, res) => {
     return res.status(500).json({ error: 'Server error fetching seller profile' });
   }
 };
+
+/**
+ * FE/BE: Seller Inventory Management Overview
+ */
+export const getSellerInventory = async (req, res) => {
+  const sellerId = req.user.id;
+
+  try {
+    const query = `
+      SELECT p.*, c.name as category_name,
+             COALESCE((
+               SELECT SUM(o.quantity)::int 
+               FROM orders o 
+               WHERE o.product_id = p.id AND o.status NOT IN ('cancelled', 'refunded')
+             ), 0) as units_ordered,
+             COALESCE((
+               SELECT json_agg(json_build_object('id', pv.id, 'color', pv.color, 'size', pv.size, 'stock', pv.stock, 'image_url', pv.image_url))
+               FROM product_variants pv WHERE pv.product_id = p.id
+             ), '[]'::json) as variants,
+             COALESCE((
+               SELECT json_agg(json_build_object('group_size', pt.group_size, 'price', pt.price) ORDER BY pt.group_size ASC)
+               FROM product_tiers pt WHERE pt.product_id = p.id
+             ), '[]'::json) as tiers
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.seller_id = $1
+      ORDER BY p.created_at DESC
+    `;
+    const result = await pool.query(query, [sellerId]);
+    return res.status(200).json({ inventory: result.rows });
+  } catch (error) {
+    console.error('Error in getSellerInventory:', error.message);
+    return res.status(500).json({ error: 'Server error loading inventory overview' });
+  }
+};
+
+/**
+ * FE/BE: Quick Update Stock
+ */
+export const updateProductStock = async (req, res) => {
+  const { id } = req.params;
+  const { stock, variants } = req.body;
+  const sellerId = req.user.id;
+
+  if (stock === undefined && (!variants || !Array.isArray(variants))) {
+    return res.status(400).json({ error: 'Stock quantity or variant stock updates are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Verify seller ownership
+    const prodCheck = await client.query(
+      'SELECT id, seller_id FROM products WHERE id = $1',
+      [id]
+    );
+    if (prodCheck.rowCount === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    if (prodCheck.rows[0].seller_id !== sellerId) {
+      return res.status(403).json({ error: 'Access Denied: Product does not belong to you' });
+    }
+
+    // 2. Update parent product stock if provided
+    let updatedProduct = null;
+    if (stock !== undefined) {
+      const parsedStock = Math.max(0, parseInt(stock) || 0);
+      const updateRes = await client.query(
+        'UPDATE products SET stock = $1 WHERE id = $2 RETURNING *',
+        [parsedStock, id]
+      );
+      updatedProduct = updateRes.rows[0];
+    }
+
+    // 3. Update variant stock if provided
+    if (variants && Array.isArray(variants)) {
+      for (const v of variants) {
+        if (v.id && v.stock !== undefined) {
+          await client.query(
+            'UPDATE product_variants SET stock = $1 WHERE id = $2 AND product_id = $3',
+            [Math.max(0, parseInt(v.stock) || 0), v.id, id]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      message: 'Stock updated successfully',
+      product: updatedProduct
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in updateProductStock:', error.message);
+    return res.status(500).json({ error: 'Server error updating stock' });
+  } finally {
+    client.release();
+  }
+};
+

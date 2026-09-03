@@ -1,50 +1,115 @@
 -- ==============================================================================
--- SLABOFY — COMPLETE DATABASE SCHEMA & MIGRATION SCRIPT
--- Database Engine: PostgreSQL
+-- SLABOFY — COMPLETE PRODUCTION DATABASE SCHEMA & MIGRATION SCRIPT
+-- Database Engine: PostgreSQL 14+
+-- Generated for: Slabofy Marketplace Platform
+-- Includes: 12 ENUM Types, 15 Relational Tables, Indexes, Constraints & Seed Data
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- 1. ENUMS
+-- 1. ENUMS (Custom Data Types)
 -- ------------------------------------------------------------------------------
 DO $$ 
 BEGIN
+    -- User Roles
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
         CREATE TYPE user_role AS ENUM ('user', 'seller', 'admin');
     END IF;
+
+    -- Product Approval Lifecycle Status
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'product_status') THEN
         CREATE TYPE product_status AS ENUM ('pending', 'active', 'rejected');
     END IF;
+
+    -- Group Buying Deal Status
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'group_status') THEN
         CREATE TYPE group_status AS ENUM ('active', 'complete', 'expired', 'cancelled');
     END IF;
+
+    -- Customer Order Status
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
-        CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded', 'return_requested');
+        CREATE TYPE order_status AS ENUM (
+            'pending',
+            'confirmed',
+            'shipped',
+            'delivered',
+            'cancelled',
+            'refunded',
+            'return_requested'
+        );
     END IF;
+
+    -- Return Request Lifecycle Status
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'return_status') THEN
-        CREATE TYPE return_status AS ENUM ('requested', 'seller_approved', 'seller_rejected', 'admin_approved', 'admin_rejected', 'pickup_done', 'refunded', 'closed');
+        CREATE TYPE return_status AS ENUM (
+            'requested',
+            'seller_approved',
+            'seller_rejected',
+            'admin_approved',
+            'admin_rejected',
+            'pickup_done',
+            'refunded',
+            'closed'
+        );
     END IF;
+
+    -- Return Reasons
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'return_reason') THEN
-        CREATE TYPE return_reason AS ENUM ('defective_item', 'wrong_item_delivered', 'item_not_as_described', 'size_fit_issue', 'changed_mind', 'damaged_in_transit', 'missing_parts', 'other');
+        CREATE TYPE return_reason AS ENUM (
+            'defective_item',
+            'wrong_item_delivered',
+            'item_not_as_described',
+            'size_fit_issue',
+            'changed_mind',
+            'damaged_in_transit',
+            'missing_parts',
+            'other'
+        );
     END IF;
+
+    -- Razorpay Escrow Pre-Auth Hold Status
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'preauth_status') THEN
         CREATE TYPE preauth_status AS ENUM ('authorized', 'captured', 'voided');
     END IF;
+
+    -- Multi-Channel Notification Types
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_channel') THEN
         CREATE TYPE notification_channel AS ENUM ('whatsapp', 'push', 'email');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_status') THEN
         CREATE TYPE notification_status AS ENUM ('sent', 'failed');
     END IF;
+
+    -- Shiprocket Courier Shipment Status
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shipment_status') THEN
-        CREATE TYPE shipment_status AS ENUM ('pending', 'created', 'courier_pending', 'pickup_scheduled', 'in_transit', 'delivered', 'cancelled', 'rto');
+        CREATE TYPE shipment_status AS ENUM (
+            'pending',
+            'created',
+            'courier_pending',
+            'pickup_scheduled',
+            'in_transit',
+            'delivered',
+            'cancelled',
+            'rto'
+        );
     END IF;
+
+    -- Merchant Support Ticket Helpdesk
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ticket_status') THEN
         CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'closed');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ticket_category') THEN
-        CREATE TYPE ticket_category AS ENUM ('payments_payouts', 'order_issue', 'product_listing', 'account_kyc', 'technical_bug', 'shiprocket_delivery', 'other');
+        CREATE TYPE ticket_category AS ENUM (
+            'payments_payouts',
+            'order_issue',
+            'product_listing',
+            'account_kyc',
+            'technical_bug',
+            'shiprocket_delivery',
+            'other'
+        );
     END IF;
 END $$;
+
 
 -- ------------------------------------------------------------------------------
 -- 2. USERS TABLE
@@ -53,7 +118,7 @@ CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE,
-    phone VARCHAR(20) UNIQUE NOT NULL, -- Format: +91XXXXXXXXXX
+    phone VARCHAR(20) UNIQUE NOT NULL, -- E.164 standard format (+91XXXXXXXXXX)
     password_hash VARCHAR(255),
     role user_role DEFAULT 'user',
     is_verified BOOLEAN DEFAULT false,
@@ -63,6 +128,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
 
 -- ------------------------------------------------------------------------------
 -- 3. CATEGORIES TABLE
@@ -70,12 +137,13 @@ CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE TABLE IF NOT EXISTS categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
-    commission_pct DECIMAL(5,2) DEFAULT 5.00, -- Commission percentage deducted from seller
+    commission_pct DECIMAL(5,2) DEFAULT 5.00, -- Commission percentage deducted from seller payouts
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+
 -- ------------------------------------------------------------------------------
--- 4. PRODUCTS TABLE
+-- 4. PRODUCTS TABLE (Includes Admin-Only Delivery Charges)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
@@ -93,7 +161,7 @@ CREATE TABLE IF NOT EXISTS products (
     length_cm DECIMAL(6,2) DEFAULT 10.00,
     breadth_cm DECIMAL(6,2) DEFAULT 10.00,
     height_cm DECIMAL(6,2) DEFAULT 5.00,
-    delivery_fee DECIMAL(10,2) DEFAULT 0.00,
+    delivery_fee DECIMAL(10,2) DEFAULT 0.00, -- Admin controlled delivery charge (Hidden from Seller)
     status product_status DEFAULT 'pending',
     reject_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -102,6 +170,7 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_seller ON products(seller_id);
 CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
+
 
 -- ------------------------------------------------------------------------------
 -- 5. PRODUCT VARIANTS TABLE
@@ -118,6 +187,7 @@ CREATE TABLE IF NOT EXISTS product_variants (
 
 CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id);
 
+
 -- ------------------------------------------------------------------------------
 -- 6. PRODUCT TIERS TABLE (Tiered discounts for group sizes: 1, 2, 3, 5, 10)
 -- ------------------------------------------------------------------------------
@@ -131,8 +201,9 @@ CREATE TABLE IF NOT EXISTS product_tiers (
 
 CREATE INDEX IF NOT EXISTS idx_product_tiers_product ON product_tiers(product_id);
 
+
 -- ------------------------------------------------------------------------------
--- 7. GROUPS TABLE
+-- 7. GROUPS TABLE (Co-Buying Deal Rooms)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS groups (
     id SERIAL PRIMARY KEY,
@@ -150,6 +221,7 @@ CREATE INDEX IF NOT EXISTS idx_groups_status_timer ON groups(status, timer_end);
 CREATE INDEX IF NOT EXISTS idx_groups_product ON groups(product_id);
 CREATE INDEX IF NOT EXISTS idx_groups_creator ON groups(creator_id);
 
+
 -- ------------------------------------------------------------------------------
 -- 8. GROUP MEMBERS TABLE
 -- ------------------------------------------------------------------------------
@@ -163,6 +235,7 @@ CREATE TABLE IF NOT EXISTS group_members (
 
 CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
+
 
 -- ------------------------------------------------------------------------------
 -- 9. ORDERS TABLE
@@ -195,7 +268,7 @@ CREATE TABLE IF NOT EXISTS orders (
     courier_id INT,
     courier_name_sr VARCHAR(255),
     estimated_delivery DATE,
-    shipping_charges DECIMAL(8,2),
+    shipping_charges DECIMAL(8,2) DEFAULT 0.00, -- Delivery fee charged to customer
     shipment_status shipment_status DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -206,8 +279,9 @@ CREATE INDEX IF NOT EXISTS idx_orders_group ON orders(group_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_razorpay ON orders(razorpay_order_id);
 
+
 -- ------------------------------------------------------------------------------
--- 10. PAYMENT PRE-AUTHORIZATION TABLE
+-- 10. PAYMENT PRE-AUTHORIZATION TABLE (Escrow Hold Records)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS payment_preauth (
     id SERIAL PRIMARY KEY,
@@ -222,8 +296,9 @@ CREATE TABLE IF NOT EXISTS payment_preauth (
 CREATE INDEX IF NOT EXISTS idx_preauth_order ON payment_preauth(order_id);
 CREATE INDEX IF NOT EXISTS idx_preauth_status ON payment_preauth(status);
 
+
 -- ------------------------------------------------------------------------------
--- 11. SELLER PROFILES TABLE
+-- 11. SELLER PROFILES TABLE (KYC & Shiprocket Pickup Location)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS seller_profiles (
     id SERIAL PRIMARY KEY,
@@ -250,9 +325,11 @@ CREATE TABLE IF NOT EXISTS seller_profiles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_seller_profiles_approved ON seller_profiles(is_approved);
+CREATE INDEX IF NOT EXISTS idx_seller_profiles_user ON seller_profiles(user_id);
+
 
 -- ------------------------------------------------------------------------------
--- 12. SHIPMENT TRACKING TABLE
+-- 12. SHIPMENT TRACKING TABLE (Courier Event History)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS shipment_tracking (
     id SERIAL PRIMARY KEY,
@@ -269,8 +346,9 @@ CREATE TABLE IF NOT EXISTS shipment_tracking (
 CREATE INDEX IF NOT EXISTS idx_shipment_tracking_order ON shipment_tracking(order_id);
 CREATE INDEX IF NOT EXISTS idx_shipment_tracking_awb ON shipment_tracking(awb_code);
 
+
 -- ------------------------------------------------------------------------------
--- 12. COUPONS / PROMOS TABLE
+-- 13. COUPONS / PROMOS TABLE
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS coupons (
     id SERIAL PRIMARY KEY,
@@ -287,8 +365,9 @@ CREATE TABLE IF NOT EXISTS coupons (
 
 CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(code);
 
+
 -- ------------------------------------------------------------------------------
--- 13. NOTIFICATION LOG TABLE
+-- 14. NOTIFICATION LOG TABLE
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS notification_log (
     id SERIAL PRIMARY KEY,
@@ -302,8 +381,9 @@ CREATE TABLE IF NOT EXISTS notification_log (
 
 CREATE INDEX IF NOT EXISTS idx_notification_user ON notification_log(user_id);
 
+
 -- ------------------------------------------------------------------------------
--- 14. SUPPORT TICKETS TABLE
+-- 15. SUPPORT TICKETS TABLE (Merchant Helpdesk)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS support_tickets (
     id SERIAL PRIMARY KEY,
@@ -320,8 +400,9 @@ CREATE TABLE IF NOT EXISTS support_tickets (
 CREATE INDEX IF NOT EXISTS idx_support_tickets_seller ON support_tickets(seller_id);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
 
+
 -- ------------------------------------------------------------------------------
--- 15. RETURN REQUESTS TABLE
+-- 16. RETURN REQUESTS TABLE (Returns & 100% Refunds Management)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS return_requests (
     id SERIAL PRIMARY KEY,
@@ -346,11 +427,59 @@ CREATE INDEX IF NOT EXISTS idx_return_requests_buyer ON return_requests(buyer_id
 CREATE INDEX IF NOT EXISTS idx_return_requests_seller ON return_requests(seller_id);
 CREATE INDEX IF NOT EXISTS idx_return_requests_status ON return_requests(status);
 
+
 -- ------------------------------------------------------------------------------
--- 16. SEED DATA (Default Categories, Admin User & Sample Catalog)
+-- 17. RETROFIT & UPGRADE STATEMENTS FOR EXISTING PARTIAL DATABASES
+-- (Guarantees missing columns are added if tables already existed prior to migration)
+-- ------------------------------------------------------------------------------
+ALTER TABLE seller_profiles
+ADD COLUMN IF NOT EXISTS pickup_name VARCHAR(255),
+ADD COLUMN IF NOT EXISTS pickup_phone VARCHAR(20),
+ADD COLUMN IF NOT EXISTS pickup_address TEXT,
+ADD COLUMN IF NOT EXISTS pickup_city VARCHAR(100),
+ADD COLUMN IF NOT EXISTS pickup_state VARCHAR(100),
+ADD COLUMN IF NOT EXISTS pickup_pincode VARCHAR(10),
+ADD COLUMN IF NOT EXISTS pickup_country VARCHAR(50) DEFAULT 'India',
+ADD COLUMN IF NOT EXISTS shiprocket_pickup_id VARCHAR(100);
+
+ALTER TABLE products
+ADD COLUMN IF NOT EXISTS weight_kg DECIMAL(5,2) DEFAULT 0.50,
+ADD COLUMN IF NOT EXISTS length_cm DECIMAL(6,2) DEFAULT 10.00,
+ADD COLUMN IF NOT EXISTS breadth_cm DECIMAL(6,2) DEFAULT 10.00,
+ADD COLUMN IF NOT EXISTS height_cm DECIMAL(6,2) DEFAULT 5.00,
+ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0.00,
+ADD COLUMN IF NOT EXISTS reject_reason TEXT;
+
+ALTER TABLE orders
+ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(50),
+ADD COLUMN IF NOT EXISTS variant_id INT REFERENCES product_variants(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS color VARCHAR(100),
+ADD COLUMN IF NOT EXISTS size VARCHAR(50),
+ADD COLUMN IF NOT EXISTS is_cod BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS shipping_address TEXT,
+ADD COLUMN IF NOT EXISTS delivery_pincode VARCHAR(10),
+ADD COLUMN IF NOT EXISTS courier_name VARCHAR(255),
+ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(255),
+ADD COLUMN IF NOT EXISTS shiprocket_order_id VARCHAR(100),
+ADD COLUMN IF NOT EXISTS shiprocket_shipment_id VARCHAR(100),
+ADD COLUMN IF NOT EXISTS awb_code VARCHAR(100),
+ADD COLUMN IF NOT EXISTS courier_id INT,
+ADD COLUMN IF NOT EXISTS courier_name_sr VARCHAR(255),
+ADD COLUMN IF NOT EXISTS estimated_delivery DATE,
+ADD COLUMN IF NOT EXISTS shipping_charges DECIMAL(8,2) DEFAULT 0.00,
+ADD COLUMN IF NOT EXISTS shipment_status shipment_status DEFAULT 'pending';
+
+ALTER TABLE coupons
+ADD COLUMN IF NOT EXISTS uses INT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS uses_count INT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
+
+-- ------------------------------------------------------------------------------
+-- 18. SEED DATA (Default Categories, Admin Account & Starter Coupons)
 -- ------------------------------------------------------------------------------
 
--- Seed Categories
+-- Default Marketplace Categories
 INSERT INTO categories (name, commission_pct) VALUES
 ('Electronics', 8.00),
 ('Apparel & Fashion', 12.00),
@@ -362,13 +491,13 @@ INSERT INTO categories (name, commission_pct) VALUES
 ('Toys & Games', 9.00)
 ON CONFLICT (name) DO NOTHING;
 
--- Seed Default Admin User
--- Password: adminpassword123 (bcrypt hash: $2a$10$zBBjDRWC6O9ydIb1ypAhU.I8GZ1rkodjaVg/NvV7RaRomcmj2lVGW)
+-- Default Platform Administrator
+-- Credentials: Phone: +919999999999 | Password: adminpassword123
 INSERT INTO users (name, email, phone, password_hash, role, is_verified) VALUES
 ('System Administrator', 'admin@slabofy.com', '+919999999999', '$2a$10$zBBjDRWC6O9ydIb1ypAhU.I8GZ1rkodjaVg/NvV7RaRomcmj2lVGW', 'admin', true)
 ON CONFLICT (phone) DO NOTHING;
 
--- Seed Sample Demo Coupons
+-- Starter Promotional Coupons
 INSERT INTO coupons (code, discount_type, discount_value, expiry, max_uses, uses, is_active) VALUES
 ('WELCOME50', 'flat', 50.00, NOW() + INTERVAL '365 days', 1000, 0, true),
 ('GROUP10', 'pct', 10.00, NOW() + INTERVAL '365 days', 500, 0, true)

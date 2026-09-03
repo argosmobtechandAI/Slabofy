@@ -3,9 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Store, Tag, Plus, PlusCircle, ShoppingCart, RefreshCw, AlertTriangle, ArrowRight, ShieldCheck, CheckCircle2, Truck, HelpCircle, User, Lock, Trash2, X, UploadCloud, Video, Users, Menu, TrendingUp, Clock, Package } from 'lucide-react';
+import { 
+  Store, Tag, Plus, PlusCircle, ShoppingCart, RefreshCw, AlertTriangle, ArrowRight, 
+  ShieldCheck, CheckCircle2, Truck, HelpCircle, User, Lock, Trash2, X, UploadCloud, 
+  Video, Users, Menu, TrendingUp, Clock, Package, DollarSign, CreditCard, Layers, 
+  Download, Check, LifeBuoy, MessageSquare, Search, Edit3, Phone, Mail, FileText,
+  RotateCcw, LogOut
+} from 'lucide-react';
 import { Navigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import InvoiceModal from '../components/InvoiceModal';
 
 const PREDEFINED_COLORS = [
   { name: 'Red', hex: '#ef4444' },
@@ -20,8 +27,64 @@ const PREDEFINED_COLORS = [
   { name: 'Orange', hex: '#f97316' },
 ];
 
+const VARIANT_DIMENSION_PRESETS = {
+  clothing: {
+    label: 'Apparel / Clothing Sizes',
+    unitName: 'Size',
+    presets: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'],
+    placeholder: 'e.g. S, M, L, XL'
+  },
+  waist: {
+    label: 'Waist Size (Inches)',
+    unitName: 'Waist',
+    presets: ['28in', '30in', '32in', '34in', '36in', '38in', '40in', '42in'],
+    placeholder: 'e.g. 28in, 30in, 32in'
+  },
+  shoe: {
+    label: 'Footwear / Shoe Size',
+    unitName: 'Shoe Size',
+    presets: ['UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10', 'UK 11', 'UK 12', 'EU 39', 'EU 40', 'EU 41', 'EU 42', 'EU 43', 'EU 44'],
+    placeholder: 'e.g. UK 7, UK 8, UK 9'
+  },
+  liquid: {
+    label: 'Liquid / Volume (mL / L)',
+    unitName: 'Volume',
+    presets: ['50mL', '100mL', '200mL', '250mL', '500mL', '750mL', '1L', '2L', '5L'],
+    placeholder: 'e.g. 100mL, 250mL, 500mL, 1L'
+  },
+  weight: {
+    label: 'Weight / Quantity (g / kg)',
+    unitName: 'Weight',
+    presets: ['50g', '100g', '250g', '500g', '1kg', '2kg', '5kg', '10kg'],
+    placeholder: 'e.g. 250g, 500g, 1kg'
+  },
+  pack: {
+    label: 'Pack / Count (Pcs)',
+    unitName: 'Pack Size',
+    presets: ['Pack of 1', 'Pack of 2', 'Pack of 3', 'Pack of 4', 'Pack of 5', 'Pack of 6', 'Pack of 10'],
+    placeholder: 'e.g. Pack of 2, Pack of 5'
+  },
+  storage: {
+    label: 'Electronics / Storage',
+    unitName: 'Capacity',
+    presets: ['32GB', '64GB', '128GB', '256GB', '512GB', '1TB'],
+    placeholder: 'e.g. 64GB, 128GB, 256GB'
+  },
+  custom: {
+    label: 'Custom Size / Measurement',
+    unitName: 'Option',
+    presets: [],
+    placeholder: 'e.g. Standard, Compact, Queen, King, 100cm'
+  }
+};
+
 export default function SellerPanel() {
-  const { isLoggedIn, user, updateProfile } = useAuth();
+  const { isLoggedIn, user, updateProfile, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/seller/login';
+  };
   
   // States
   const [profile, setProfile] = useState(null);
@@ -29,9 +92,8 @@ export default function SellerPanel() {
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'add-product'
+  const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'inventory', 'payments', 'tickets', 'add-product', 'profile'
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
 
   // Onboarding Form State
   const [businessName, setBusinessName] = useState('');
@@ -47,6 +109,12 @@ export default function SellerPanel() {
   const [stock, setStock] = useState(100);
   const [imageUrls, setImageUrls] = useState([]);
   const [videoUrls, setVideoUrls] = useState([]);
+
+  // Shiprocket Package Dimensions
+  const [weightKg, setWeightKg] = useState('0.50');
+  const [lengthCm, setLengthCm] = useState('10.0');
+  const [breadthCm, setBreadthCm] = useState('10.0');
+  const [heightCm, setHeightCm] = useState('5.0');
   
   // Dynamic Tiers State
   const [tiers, setTiers] = useState([
@@ -79,14 +147,59 @@ export default function SellerPanel() {
 
   // Variants State
   const [selectedColors, setSelectedColors] = useState([]);
+  const [variantDimensionType, setVariantDimensionType] = useState('clothing');
+  const [selectedPresetSizes, setSelectedPresetSizes] = useState([]);
   const [sizesInput, setSizesInput] = useState('');
   const [variantsMatrix, setVariantsMatrix] = useState([]);
 
-  // Shipment Form State
-  const [shippingOrderId, setShippingOrderId] = useState(null);
-  const [courierName, setCourierName] = useState('');
-  const [trackingNumber, setTrackingNumber] = useState('');
-  const [shippingSubmitting, setShippingSubmitting] = useState(false);
+  // Inventory Management State
+  const [inventory, setInventory] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryFilterStatus, setInventoryFilterStatus] = useState('all');
+  const [restockProduct, setRestockProduct] = useState(null);
+  const [restockStockValue, setRestockStockValue] = useState(0);
+  const [restockVariants, setRestockVariants] = useState([]);
+  const [restockSubmitting, setRestockSubmitting] = useState(false);
+
+  // Edit Product & Tiers Modal State
+  const [editProductModal, setEditProductModal] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editSku, setEditSku] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editStock, setEditStock] = useState(0);
+  const [editMaxGroupSize, setEditMaxGroupSize] = useState(10);
+  const [editTiers, setEditTiers] = useState([]);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  // Support Tickets State
+  const [myTickets, setMyTickets] = useState([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketCategory, setTicketCategory] = useState('payments_payouts');
+  const [ticketSubject, setTicketSubject] = useState('');
+  const [ticketDescription, setTicketDescription] = useState('');
+  const [ticketSubmitting, setTicketSubmitting] = useState(false);
+
+  // Shiprocket 2-Step Dispatch Modal State
+  const [shipModalOrder, setShipModalOrder] = useState(null);
+  const [shipStep, setShipStep] = useState(1); // 1 = Review & Create Shipment, 2 = Pick Courier
+  const [availableCouriers, setAvailableCouriers] = useState([]);
+  const [selectedCourier, setSelectedCourier] = useState(null);
+  const [shipLoading, setShipLoading] = useState(false);
+
+  // Live Tracking Modal State
+  const [trackingModalOrder, setTrackingModalOrder] = useState(null);
+  const [trackingData, setTrackingData] = useState(null);
+
+  // Invoice Modal State
+  const [invoiceModalOrder, setInvoiceModalOrder] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+
+  // Return Requests State
+  const [sellerReturns, setSellerReturns] = useState([]);
+  const [returnsLoading, setReturnsLoading] = useState(false);
+  const [returnActionModal, setReturnActionModal] = useState(null);
+  const [returnActionSubmitting, setReturnActionSubmitting] = useState(false);
 
   // Security Form State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -100,10 +213,13 @@ export default function SellerPanel() {
     if (isLoggedIn) {
       fetchSellerData();
       fetchCategories();
+      if (activeTab === 'inventory') fetchInventory();
+      if (activeTab === 'tickets') fetchMyTickets();
+      if (activeTab === 'returns') fetchSellerReturns();
     } else {
       setLoading(false);
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, activeTab]);
 
   const fetchCategories = async () => {
     try {
@@ -111,6 +227,77 @@ export default function SellerPanel() {
       setCategories(res.data.categories || []);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchInventory = async () => {
+    setInventoryLoading(true);
+    try {
+      const res = await api.get('/seller/inventory');
+      setInventory(res.data.inventory || []);
+    } catch (err) {
+      console.error('Error fetching inventory:', err);
+      toast.error('Failed to load inventory dataset');
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  const fetchMyTickets = async () => {
+    setTicketsLoading(true);
+    try {
+      const res = await api.get('/tickets/my');
+      setMyTickets(res.data.tickets || []);
+    } catch (err) {
+      console.error('Error fetching tickets:', err);
+      toast.error('Failed to load support tickets');
+    } finally {
+      setTicketsLoading(false);
+    }
+  };
+
+  const fetchSellerReturns = async () => {
+    setReturnsLoading(true);
+    try {
+      const res = await api.get('/returns/seller');
+      setSellerReturns(res.data.returns || []);
+    } catch (err) {
+      console.error('Error fetching seller returns:', err);
+      toast.error('Failed to load return requests');
+    } finally {
+      setReturnsLoading(false);
+    }
+  };
+
+  const handleSellerActOnReturn = async () => {
+    if (!returnActionModal) return;
+    setReturnActionSubmitting(true);
+    try {
+      await api.put(`/returns/seller/${returnActionModal.returnReq.id}`, {
+        action: returnActionModal.action,
+        seller_note: returnActionModal.note
+      });
+      toast.success(
+        returnActionModal.action === 'approve'
+          ? 'Return approved and inventory restocked!'
+          : 'Return request rejected'
+      );
+      setReturnActionModal(null);
+      fetchSellerReturns();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update return request');
+    } finally {
+      setReturnActionSubmitting(false);
+    }
+  };
+
+  const handleMarkPickupDone = async (returnId) => {
+    try {
+      await api.put(`/returns/seller/${returnId}/pickup-done`);
+      toast.success('Pickup marked as completed! Package collected.');
+      fetchSellerReturns();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to mark pickup');
     }
   };
 
@@ -221,6 +408,10 @@ export default function SellerPanel() {
         videos: videoUrls,
         max_group_size: parsedMax,
         group_window_hours: parseInt(groupWindowHours),
+        weight_kg: parseFloat(weightKg) || 0.50,
+        length_cm: parseFloat(lengthCm) || 10.00,
+        breadth_cm: parseFloat(breadthCm) || 10.00,
+        height_cm: parseFloat(heightCm) || 5.00,
         tiers: parsedTiers,
         variants: variantsMatrix
       };
@@ -231,6 +422,7 @@ export default function SellerPanel() {
       // Reset all form state including new fields
       setName(''); setSku(''); setDescription(''); setStock(100);
       setImageUrls([]); setVideoUrls([]);
+      setWeightKg('0.50'); setLengthCm('10.0'); setBreadthCm('10.0'); setHeightCm('5.0');
       setTiers([{ group_size: 1, price: '' }, { group_size: '', price: '' }]);
       setMaxGroupSize(10);
       setGroupWindowHours(24);
@@ -282,48 +474,40 @@ export default function SellerPanel() {
     });
   };
 
-  const handleVariantImageUpload = (idx, e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image size must be less than 2MB');
-      return;
+  const handleColorToggle = (colorName) => {
+    let next;
+    if (selectedColors.includes(colorName)) {
+      next = selectedColors.filter(c => c !== colorName);
+    } else {
+      next = [...selectedColors, colorName];
     }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const updated = [...variantsMatrix];
-      updated[idx].image_url = reader.result;
-      setVariantsMatrix(updated);
-    };
-    reader.readAsDataURL(file);
+    setSelectedColors(next);
+    regenerateVariants(next, sizesInput);
   };
 
-  const toggleColor = (colorName) => {
-    setSelectedColors(prev => 
-      prev.includes(colorName) ? prev.filter(c => c !== colorName) : [...prev, colorName]
-    );
+  const handleSizesChange = (e) => {
+    const val = e.target.value;
+    setSizesInput(val);
+    regenerateVariants(selectedColors, val);
   };
 
-  const handleGenerateVariants = () => {
-    const colors = selectedColors;
-    const sizes = sizesInput.split(',').map(s => s.trim()).filter(Boolean);
-    
+  const regenerateVariants = (colors, rawSizes) => {
+    const sizes = rawSizes.split(',').map(s => s.trim()).filter(Boolean);
     if (colors.length === 0 && sizes.length === 0) {
       setVariantsMatrix([]);
       return;
     }
-    
+    const colorList = colors.length > 0 ? colors : [null];
+    const sizeList = sizes.length > 0 ? sizes : [null];
+
     const newMatrix = [];
-    const cList = colors.length > 0 ? colors : ['Default'];
-    const sList = sizes.length > 0 ? sizes : ['Default'];
-    
-    cList.forEach(c => {
-      sList.forEach(s => {
-        const existing = variantsMatrix.find(v => v.color === c && v.size === s);
+    colorList.forEach(color => {
+      sizeList.forEach(size => {
+        const existing = variantsMatrix.find(v => v.color === color && v.size === size);
         newMatrix.push({
-          color: c,
-          size: s,
-          stock: existing ? existing.stock : 0,
+          color,
+          size,
+          stock: existing ? existing.stock : 10,
           image_url: existing ? existing.image_url : null
         });
       });
@@ -337,28 +521,271 @@ export default function SellerPanel() {
     setVariantsMatrix(updated);
   };
 
-  /**
-   * Ship order submit handler
-   */
-  const handleShipOrder = async (e) => {
-    e.preventDefault();
-    if (!courierName || !trackingNumber) return toast.error('Courier name and tracking code are required');
-    
-    setShippingSubmitting(true);
+  const handleDimensionTypeChange = (type) => {
+    setVariantDimensionType(type);
+    setSelectedPresetSizes([]);
+    setSizesInput('');
+    regenerateVariants(selectedColors, '');
+  };
+
+  const handleTogglePresetSize = (preset) => {
+    let nextPresets;
+    if (selectedPresetSizes.includes(preset)) {
+      nextPresets = selectedPresetSizes.filter(p => p !== preset);
+    } else {
+      nextPresets = [...selectedPresetSizes, preset];
+    }
+    setSelectedPresetSizes(nextPresets);
+
+    // Merge preset selections with custom typed values
+    const currentCustom = sizesInput.split(',').map(s => s.trim()).filter(s => !VARIANT_DIMENSION_PRESETS[variantDimensionType]?.presets.includes(s) && Boolean(s));
+    const mergedSizes = [...nextPresets, ...currentCustom].join(', ');
+    setSizesInput(mergedSizes);
+    regenerateVariants(selectedColors, mergedSizes);
+  };
+
+  const handleOpenRestockModal = (product) => {
+    setRestockProduct(product);
+    setRestockStockValue(product.stock || 0);
+    setRestockVariants(Array.isArray(product.variants) ? product.variants.map(v => ({ ...v })) : []);
+  };
+
+  const handleSaveRestock = async () => {
+    if (!restockProduct) return;
+    setRestockSubmitting(true);
     try {
-      await api.put(`/seller/orders/${shippingOrderId}/ship`, {
-        courier_name: courierName,
-        tracking_number: trackingNumber
+      await api.patch(`/seller/products/${restockProduct.id}/stock`, {
+        stock: parseInt(restockStockValue) || 0,
+        variants: restockVariants
       });
-      toast.success('Order status updated to Shipped!');
-      setShippingOrderId(null);
-      setCourierName('');
-      setTrackingNumber('');
+      toast.success('Inventory stock updated successfully!');
+      setRestockProduct(null);
+      fetchInventory();
       fetchSellerData();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to update order shipment');
+      toast.error(err.response?.data?.error || 'Failed to update stock');
     } finally {
-      setShippingSubmitting(false);
+      setRestockSubmitting(false);
+    }
+  };
+
+  const handleOpenEditProduct = (p) => {
+    setEditProductModal(p);
+    setEditName(p.name || '');
+    setEditSku(p.sku || '');
+    setEditDescription(p.description || '');
+    setEditStock(p.stock || 0);
+    setEditMaxGroupSize(p.max_group_size || 10);
+    setEditTiers(
+      Array.isArray(p.tiers) && p.tiers.length > 0
+        ? p.tiers.map(t => ({ group_size: t.group_size, price: t.price }))
+        : [
+            { group_size: 1, price: '' },
+            { group_size: p.max_group_size || 5, price: '' }
+          ]
+    );
+  };
+
+  const handleEditTierChange = (idx, field, val) => {
+    setEditTiers(prev => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [field]: val };
+      return updated;
+    });
+  };
+
+  const handleAddEditTier = () => {
+    setEditTiers(prev => [...prev, { group_size: '', price: '' }]);
+  };
+
+  const handleRemoveEditTier = (idx) => {
+    if (idx === 0) return toast.error('Solo tier (size 1) cannot be removed');
+    setEditTiers(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveEditProduct = async () => {
+    if (!editProductModal) return;
+    if (!editName.trim()) return toast.error('Product name is required');
+
+    const parsedTiers = editTiers.map(t => ({
+      group_size: parseInt(t.group_size),
+      price: parseFloat(t.price)
+    })).filter(t => !isNaN(t.group_size) && !isNaN(t.price) && t.price > 0);
+
+    if (!parsedTiers.some(t => t.group_size === 1)) {
+      return toast.error('A solo tier (group size = 1) is required');
+    }
+
+    setEditSubmitting(true);
+    try {
+      await api.put(`/products/${editProductModal.id}`, {
+        name: editName.trim(),
+        sku: editSku.trim(),
+        description: editDescription.trim(),
+        stock: parseInt(editStock) || 0,
+        max_group_size: parseInt(editMaxGroupSize) || 10,
+        tiers: parsedTiers
+      });
+      toast.success('Product details and pricing tiers updated successfully!');
+      setEditProductModal(null);
+      fetchInventory();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update product');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleCreateTicket = async (e) => {
+    e.preventDefault();
+    if (!ticketSubject.trim()) return toast.error('Ticket subject is required');
+    if (!ticketDescription.trim()) return toast.error('Ticket description is required');
+
+    setTicketSubmitting(true);
+    try {
+      await api.post('/tickets', {
+        category: ticketCategory,
+        subject: ticketSubject.trim(),
+        description: ticketDescription.trim()
+      });
+      toast.success('Support ticket created! Our operations team will assist you soon.');
+      setTicketSubject('');
+      setTicketDescription('');
+      fetchMyTickets();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to create support ticket');
+    } finally {
+      setTicketSubmitting(false);
+    }
+  };
+
+  const exportEarningsCSV = () => {
+    if (!orders || orders.length === 0) {
+      return toast.error('No orders available to export');
+    }
+
+    const headers = ['Order ID', 'Date', 'Product Name', 'Variant', 'Buyer Name', 'Delivery Pincode', 'Payment Mode', 'Gross Amount (INR)', 'Commission %', 'Commission Deducted (INR)', 'Net Seller Earnings (INR)', 'Order Status', 'Shipment Status', 'AWB Code'];
+
+    const rows = orders.map(o => {
+      const commAmt = ((parseFloat(o.total_amount) * parseFloat(o.commission_pct || 5)) / 100).toFixed(2);
+      const netAmt = (parseFloat(o.total_amount) - parseFloat(commAmt)).toFixed(2);
+      const variantDesc = [o.color, o.size].filter(Boolean).join(' / ') || 'Standard';
+
+      return [
+        `#ORD-${o.id}`,
+        new Date(o.created_at).toISOString().split('T')[0],
+        `"${(o.product_name || '').replace(/"/g, '""')}"`,
+        `"${variantDesc}"`,
+        `"${(o.buyer_name || '').replace(/"/g, '""')}"`,
+        o.delivery_pincode || '',
+        o.is_cod ? 'Cash on Delivery' : 'Online Prepaid',
+        parseFloat(o.total_amount).toFixed(2),
+        `${o.commission_pct || 5}%`,
+        commAmt,
+        netAmt,
+        o.status,
+        o.shipment_status || 'pending',
+        o.awb_code || ''
+      ];
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `slabofy_merchant_earnings_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Earnings ledger exported to CSV!');
+  };
+
+  // ==========================================
+  // SHIPROCKET 2-STEP DISPATCH HANDLERS
+  // ==========================================
+
+  const handleOpenShipModal = async (order) => {
+    setShipModalOrder(order);
+    setSelectedCourier(null);
+
+    // If shipment was already created and is awaiting courier selection
+    if (order.shipment_status === 'courier_pending' && order.shiprocket_order_id) {
+      setShipStep(2);
+      setShipLoading(true);
+      try {
+        const res = await api.get(`/shiprocket/orders/${order.id}/couriers`);
+        setAvailableCouriers(res.data.couriers || []);
+      } catch (err) {
+        toast.error('Failed to load couriers. You can regenerate shipment.');
+        setShipStep(1);
+      } finally {
+        setShipLoading(false);
+      }
+    } else {
+      setShipStep(1);
+      setAvailableCouriers([]);
+    }
+  };
+
+  /**
+   * Step 1: Create Shipment & Fetch Real-Time Courier Rates
+   */
+  const handleCreateShipmentStep1 = async () => {
+    if (!shipModalOrder) return;
+    setShipLoading(true);
+    try {
+      const res = await api.post(`/shiprocket/orders/${shipModalOrder.id}/create-shipment`);
+      setAvailableCouriers(res.data.couriers || []);
+      setShipStep(2);
+      toast.success('Shipment created on Shiprocket! Choose your courier partner.');
+      fetchSellerData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to create shipment on Shiprocket');
+    } finally {
+      setShipLoading(false);
+    }
+  };
+
+  /**
+   * Step 2: Assign Selected Courier & Generate AWB
+   */
+  const handleAssignCourierStep2 = async () => {
+    if (!shipModalOrder || !selectedCourier) {
+      return toast.error('Please select a courier partner');
+    }
+    setShipLoading(true);
+    try {
+      const res = await api.post(`/shiprocket/orders/${shipModalOrder.id}/assign-courier`, {
+        courier_id: selectedCourier.courier_company_id,
+        courier_name: selectedCourier.courier_name,
+        rate: selectedCourier.rate,
+        estimated_delivery_days: selectedCourier.estimated_delivery_days
+      });
+      toast.success(`Dispatched via ${selectedCourier.courier_name}! AWB: ${res.data.awb_code}`);
+      setShipModalOrder(null);
+      setSelectedCourier(null);
+      fetchSellerData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to assign courier');
+    } finally {
+      setShipLoading(false);
+    }
+  };
+
+  /**
+   * Live Order Tracking Modal
+   */
+  const handleOpenTrackingModal = async (order) => {
+    setTrackingModalOrder(order);
+    setTrackingLoading(true);
+    setTrackingData(null);
+    try {
+      const res = await api.get(`/shiprocket/orders/${order.id}/tracking`);
+      setTrackingData(res.data);
+    } catch (err) {
+      toast.error('Unable to fetch live tracking at the moment');
+    } finally {
+      setTrackingLoading(false);
     }
   };
 
@@ -463,11 +890,25 @@ export default function SellerPanel() {
   const renderTabTitle = () => {
     switch (activeTab) {
       case 'orders': return 'Shipment Orders';
+      case 'inventory': return 'Inventory & Stock Management';
+      case 'payments': return 'Payments & Earnings Ledger';
+      case 'returns': return 'Customer Return Requests';
+      case 'tickets': return 'Seller Support Helpdesk';
       case 'add-product': return 'Add New Product';
       case 'profile': return 'Profile Settings';
       default: return 'Merchant Center';
     }
   };
+
+  const SELLER_NAV_ITEMS = [
+    { tab: 'orders', icon: ShoppingCart, label: 'Shipment Orders' },
+    { tab: 'inventory', icon: Package, label: 'Inventory & Stock' },
+    { tab: 'payments', icon: TrendingUp, label: 'Payments & Payouts' },
+    { tab: 'returns', icon: RotateCcw, label: 'Returns & Refunds' },
+    { tab: 'tickets', icon: LifeBuoy, label: 'Support Helpdesk' },
+    { tab: 'add-product', icon: PlusCircle, label: 'Add New Product' },
+    { tab: 'profile', icon: User, label: 'Profile Settings' },
+  ];
 
   // CASE 3: Active Seller Panel
   return (
@@ -477,12 +918,9 @@ export default function SellerPanel() {
         <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl hover:bg-[rgba(91,33,182,0.06)] transition-colors">
           <Menu size={20} className="text-[#5b21b6]" />
         </button>
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center">
-            <span className="text-white font-bold text-sm">S</span>
-          </div>
-          <span className="font-display font-bold text-base text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span></span>
-        </div>
+        <Link to="/" className="flex items-center">
+          <img src="/slabofy-logo.png" alt="Slabofy" style={{ height: 32, width: 'auto', objectFit: 'contain' }} />
+        </Link>
       </div>
 
       {/* Mobile Drawer Overlay */}
@@ -491,7 +929,9 @@ export default function SellerPanel() {
           <div className="drawer-overlay lg:hidden" onClick={() => setSidebarOpen(false)} />
           <div className="drawer-panel sidebar-light lg:hidden flex flex-col">
             <div className="h-14 flex items-center px-5 border-b border-[rgba(91,33,182,0.08)]">
-              <span className="font-display font-bold text-base text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span> Merchant</span>
+              <Link to="/" onClick={() => setSidebarOpen(false)}>
+                <img src="/slabofy-logo.png" alt="Slabofy" style={{ height: 34, width: 'auto', objectFit: 'contain' }} />
+              </Link>
             </div>
             
             {stats && (
@@ -516,11 +956,7 @@ export default function SellerPanel() {
 
             <div className="flex-1 p-3 space-y-0.5 overflow-y-auto">
               <div className="text-[9px] font-black uppercase text-[#c4c0d8] tracking-[0.15em] px-3 py-3">Merchant Tools</div>
-              {[
-                { tab: 'orders', icon: ShoppingCart, label: 'Shipment Orders' },
-                { tab: 'add-product', icon: PlusCircle, label: 'Add New Product' },
-                { tab: 'profile', icon: User, label: 'Profile Settings' },
-              ].map((item, i) => (
+              {SELLER_NAV_ITEMS.map((item, i) => (
                 <button
                   key={item.tab}
                   onClick={() => { setActiveTab(item.tab); setSidebarOpen(false); }}
@@ -536,6 +972,15 @@ export default function SellerPanel() {
                   <span className="flex-1">{item.label}</span>
                 </button>
               ))}
+            </div>
+
+            <div className="p-3 border-t border-[rgba(91,33,182,0.08)] mt-auto bg-white/50">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 font-bold text-xs hover:bg-red-100 transition-colors cursor-pointer"
+              >
+                <LogOut size={14} /> Log Out
+              </button>
             </div>
           </div>
         </>
@@ -555,14 +1000,8 @@ export default function SellerPanel() {
           <div className="orb-ambient w-48 h-48 bg-violet-200/30 -top-12 -left-12" style={{ animationDelay: '-3s' }} />
 
           <div className="h-16 flex items-center px-5 border-b border-[rgba(91,33,182,0.08)] relative z-10">
-            <Link to="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center shadow-lg shadow-violet-500/20">
-                <span className="text-white font-bold text-base">S</span>
-              </div>
-              <div>
-                <div className="font-display font-black text-sm text-[#12100e]">Slab<span className="text-[#f05035]">ofy</span></div>
-                <div className="text-[8px] font-bold uppercase text-[#9490b8] tracking-widest">Merchant Portal</div>
-              </div>
+            <Link to="/" className="flex items-center">
+              <img src="/slabofy-logo.png" alt="Slabofy — Buy Together. Save Together." style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
             </Link>
           </div>
 
@@ -588,11 +1027,7 @@ export default function SellerPanel() {
 
           <div className="flex-1 p-3 space-y-0.5 overflow-y-auto relative z-10">
             <div className="text-[9px] font-black uppercase text-[#c4c0d8] tracking-[0.15em] px-3 py-3">Merchant Tools</div>
-            {[
-              { tab: 'orders', icon: ShoppingCart, label: 'Shipment Orders' },
-              { tab: 'add-product', icon: PlusCircle, label: 'Add New Product' },
-              { tab: 'profile', icon: User, label: 'Profile Settings' },
-            ].map((item, i) => (
+            {SELLER_NAV_ITEMS.map((item, i) => (
               <button
                 key={item.tab}
                 onClick={() => setActiveTab(item.tab)}
@@ -610,10 +1045,16 @@ export default function SellerPanel() {
             ))}
           </div>
 
-          <div className="p-3 border-t border-[rgba(91,33,182,0.08)] relative z-10">
-            <Link to="/" className="w-full flex items-center gap-3 px-4 py-2 text-xs font-semibold text-[#9490b8] hover:text-[#5b21b6] transition-colors cursor-pointer">
+          <div className="p-3 border-t border-[rgba(91,33,182,0.08)] relative z-10 space-y-1">
+            <Link to="/" className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[#9490b8] hover:text-[#5b21b6] transition-colors rounded-xl hover:bg-[rgba(91,33,182,0.04)]">
               Exit to Store
             </Link>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 hover:text-red-700 transition-colors rounded-xl hover:bg-red-50 cursor-pointer"
+            >
+              <LogOut size={14} /> Sign Out
+            </button>
           </div>
         </div>
 
@@ -626,13 +1067,21 @@ export default function SellerPanel() {
                 <p className="text-[10px] text-[#9490b8] font-medium mt-0.5">Slabofy Merchant Center</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-2.5 bg-[rgba(91,33,182,0.04)] border border-[rgba(91,33,182,0.1)] rounded-2xl px-3 py-2">
                 <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#5b21b6] to-[#4338ca] flex items-center justify-center text-white text-xs font-black">
                   {profile?.business_name?.charAt(0).toUpperCase() || 'M'}
                 </div>
                 <span className="text-xs font-bold text-[#12100e]">{profile?.business_name || 'Merchant'}</span>
               </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-red-600 bg-red-50/80 hover:bg-red-100 border border-red-200/60 rounded-2xl transition-colors cursor-pointer"
+                title="Sign out of seller account"
+              >
+                <LogOut size={13} />
+                <span>Sign Out</span>
+              </button>
             </div>
           </header>
 
@@ -705,11 +1154,22 @@ export default function SellerPanel() {
                     <div className="text-xs text-[#6b6560]">Buyer: {order.buyer_name}</div>
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                       <div className="text-sm font-black text-[#5b21b6]">{formatCurrency(order.total_amount)}</div>
-                      {order.status === 'confirmed' && (
-                        <button onClick={() => setShippingOrderId(order.id)} className="text-xs font-bold bg-[#5b21b6] text-white px-3 py-1.5 rounded-xl">
-                          Ship Now
+                      {order.status === 'confirmed' ? (
+                        <button 
+                          onClick={() => handleOpenShipModal(order)} 
+                          className="text-xs font-bold bg-[#4338ca] text-white px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                        >
+                          <Truck size={13} />
+                          Dispatch Shiprocket
                         </button>
-                      )}
+                      ) : order.status === 'shipped' ? (
+                        <button 
+                          onClick={() => handleOpenTrackingModal(order)}
+                          className="text-xs font-bold bg-indigo-50 text-[#4338ca] border border-indigo-200 px-3 py-1.5 rounded-xl cursor-pointer"
+                        >
+                          Track #{order.awb_code || order.tracking_number || order.id}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -725,7 +1185,7 @@ export default function SellerPanel() {
                     <th className="py-4 px-6">Buyer info</th>
                     <th className="py-4 px-6">Buy Type</th>
                     <th className="py-4 px-6">Financials</th>
-                    <th className="py-4 px-6">Fulfillment</th>
+                    <th className="py-4 px-6">Shiprocket Fulfillment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
@@ -738,10 +1198,12 @@ export default function SellerPanel() {
                       <td className="py-4 px-6">
                         <strong className="text-[#12100e] block">{ord.product_name}</strong>
                         <span className="text-[10px] text-[#6b6560]">SKU: {ord.product_sku || 'N/A'}</span>
+                        <span className="text-[9px] text-[#9490b8] block">Weight: {ord.product_weight_kg || 0.5}kg | Dim: {ord.product_length_cm || 10}x{ord.product_breadth_cm || 10}x{ord.product_height_cm || 5}cm</span>
                       </td>
                       <td className="py-4 px-6">
                         <span className="text-[#12100e] block font-medium">{ord.buyer_name}</span>
                         <span className="text-[10px] text-[#6b6560]">{ord.buyer_phone}</span>
+                        <span className="text-[9px] text-[#9490b8] block truncate max-w-[150px]">{ord.shipping_address}</span>
                       </td>
                       <td className="py-4 px-6">
                         {!ord.group_id ? (
@@ -772,21 +1234,36 @@ export default function SellerPanel() {
                           <span className="bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-bold px-2 py-0.5 rounded-full inline-block uppercase">Waiting for Group</span>
                         ) : ord.status === 'confirmed' ? (
                           <button
-                            onClick={() => setShippingOrderId(ord.id)}
-                            className="bg-brand-blue text-white font-bold px-3 py-1.5 rounded-lg text-[10px] flex items-center gap-1 cursor-pointer hover:opacity-90 active:scale-95"
+                            onClick={() => handleOpenShipModal(ord)}
+                            className="bg-[#4338ca] text-white font-bold px-3 py-2 rounded-xl text-[11px] flex items-center gap-1.5 cursor-pointer hover:bg-[#3730a3] active:scale-95 shadow-sm"
                           >
-                            <Truck size={12} />
+                            <Truck size={14} />
                             Dispatch Courier
                           </button>
                         ) : ord.status === 'shipped' ? (
-                          <div className="space-y-0.5">
-                            <span className="bg-blue-500/10 text-blue-600 border border-blue-500/20 text-[9px] font-bold px-2 py-0.5 rounded-full inline-block">SHIPPED</span>
-                            <span className="text-[10px] text-[#6b6560] block">{ord.courier_name}</span>
-                            <span className="text-[10px] text-[#5b21b6] block font-mono select-all font-bold">#{ord.tracking_number}</span>
+                          <div className="space-y-1.5">
+                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-2 py-0.5 rounded-full inline-block">
+                              {ord.shipment_status ? ord.shipment_status.replace('_', ' ').toUpperCase() : 'SHIPPED'}
+                            </span>
+                            <span className="text-[10px] text-[#12100e] font-semibold block">{ord.courier_name_sr || ord.courier_name}</span>
+                            <button
+                              onClick={() => handleOpenTrackingModal(ord)}
+                              className="text-[10px] text-[#4338ca] font-mono font-bold hover:underline block cursor-pointer"
+                            >
+                              AWB: {ord.awb_code || ord.tracking_number || 'View'} &rarr;
+                            </button>
                           </div>
                         ) : (
                           <span className="bg-gray-100 text-[#12100e] border border-gray-200 text-[9px] font-bold px-2 py-0.5 rounded-full inline-block uppercase">{ord.status}</span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => setInvoiceModalOrder(ord)}
+                          className="text-[10px] text-[#5b21b6] font-bold hover:underline flex items-center gap-1 mt-1 cursor-pointer"
+                          title="View / Print Official GST Tax Invoice"
+                        >
+                          <FileText size={11} /> Invoice
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -795,6 +1272,739 @@ export default function SellerPanel() {
             </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* TAB: INVENTORY MANAGEMENT */}
+      {activeTab === 'inventory' && (
+        <div key={activeTab} className="space-y-6 animate-tab-morph">
+          {/* Header & Controls */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Inventory & Stock Control</h2>
+              <p className="text-xs text-[#6b6560] mt-0.5">Track live stock levels, total order fulfillment, remaining warehouse units, and restock products.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={fetchInventory}
+                className="p-2.5 rounded-xl bg-white border border-gray-200 hover:border-[#5b21b6] text-[#5b21b6] shadow-sm transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+              >
+                <RefreshCw size={14} className={inventoryLoading ? 'animate-spin' : ''} /> Refresh
+              </button>
+              <button
+                onClick={() => setActiveTab('add-product')}
+                className="bg-[#5b21b6] text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md shadow-violet-500/20 hover:bg-[#4338ca] transition-all cursor-pointer"
+              >
+                <Plus size={14} /> Add Product
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-[#9490b8] uppercase block mb-1">Total Listings</span>
+              <strong className="text-xl font-display font-black text-[#12100e]">{inventory.length}</strong>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-[#9490b8] uppercase block mb-1">Active in Catalog</span>
+              <strong className="text-xl font-display font-black text-[#059669]">
+                {inventory.filter(p => p.status === 'active').length}
+              </strong>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-[#9490b8] uppercase block mb-1">Total Units Sold</span>
+              <strong className="text-xl font-display font-black text-[#5b21b6]">
+                {inventory.reduce((acc, p) => acc + (parseInt(p.units_ordered) || 0), 0)}
+              </strong>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-[#9490b8] uppercase block mb-1">Warehouse Stock Units</span>
+              <strong className="text-xl font-display font-black text-[#f59e0b]">
+                {inventory.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0)}
+              </strong>
+            </div>
+          </div>
+
+          {/* Filters & Search */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { id: 'all', label: 'All Products' },
+                { id: 'active', label: 'Active Catalog' },
+                { id: 'pending', label: 'Pending Review' },
+                { id: 'rejected', label: 'Rejected' },
+                { id: 'low_stock', label: 'Low Stock (≤10)' },
+                { id: 'out_of_stock', label: 'Out of Stock' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setInventoryFilterStatus(f.id)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                    inventoryFilterStatus === f.id
+                      ? 'bg-[#5b21b6] text-white shadow-sm'
+                      : 'bg-gray-100 text-[#6b6560] hover:bg-gray-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search name or SKU..."
+                value={inventorySearch}
+                onChange={(e) => setInventorySearch(e.target.value)}
+                className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+              />
+            </div>
+          </div>
+
+          {/* Inventory Table */}
+          {inventoryLoading ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-gray-200 shadow-sm">
+              <RefreshCw className="animate-spin text-[#5b21b6] mx-auto mb-2" size={28} />
+              <p className="text-xs text-[#6b6560]">Loading warehouse inventory...</p>
+            </div>
+          ) : (
+            (() => {
+              const filtered = inventory.filter(p => {
+                // Status / Stock filter
+                if (inventoryFilterStatus === 'active' && p.status !== 'active') return false;
+                if (inventoryFilterStatus === 'pending' && p.status !== 'pending') return false;
+                if (inventoryFilterStatus === 'rejected' && p.status !== 'rejected') return false;
+                if (inventoryFilterStatus === 'low_stock' && (p.stock > 10 || p.stock <= 0)) return false;
+                if (inventoryFilterStatus === 'out_of_stock' && p.stock > 0) return false;
+
+                // Search query
+                if (inventorySearch.trim()) {
+                  const q = inventorySearch.toLowerCase();
+                  const matchName = (p.name || '').toLowerCase().includes(q);
+                  const matchSku = (p.sku || '').toLowerCase().includes(q);
+                  const matchCat = (p.category_name || '').toLowerCase().includes(q);
+                  if (!matchName && !matchSku && !matchCat) return false;
+                }
+                return true;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="bg-white border border-gray-200 rounded-3xl p-12 text-center shadow-sm">
+                    <Package size={44} className="mx-auto text-[#5b21b6] mb-3 opacity-40" />
+                    <h3 className="text-base font-bold text-[#12100e]">No Inventory Products Found</h3>
+                    <p className="text-xs text-[#6b6560] mt-1 mb-4">No products match your current search or filter criteria.</p>
+                    <button
+                      onClick={() => { setInventoryFilterStatus('all'); setInventorySearch(''); }}
+                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-xs font-bold rounded-xl text-[#12100e]"
+                    >
+                      Clear Filters
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-[#faf8f4]">
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Product Info</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Category & SKU</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Pricing Tiers</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Units Ordered</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Stock Available</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Status</th>
+                          <th className="py-3 px-5 text-xs font-bold text-[#6b6560] text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(p => {
+                          let images = [];
+                          try { images = typeof p.images === 'string' ? JSON.parse(p.images) : (p.images || []); } catch { images = []; }
+                          const thumb = images[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&auto=format&fit=crop&q=70';
+
+                          const isOutOfStock = p.stock <= 0;
+                          const isLowStock = p.stock > 0 && p.stock <= 10;
+                          const variantsList = Array.isArray(p.variants) ? p.variants : [];
+
+                          return (
+                            <tr key={p.id} className="border-b border-gray-100 last:border-none hover:bg-gray-50/80 transition-colors">
+                              <td className="py-4 px-5">
+                                <div className="flex items-center gap-3">
+                                  <img src={thumb} alt="" className="w-12 h-12 rounded-xl object-cover bg-gray-100 flex-shrink-0 border border-gray-200" />
+                                  <div>
+                                    <h4 className="text-xs font-bold text-[#12100e] line-clamp-1">{p.name}</h4>
+                                    <span className="text-[10px] text-[#9490b8] block mt-0.5">
+                                      Pkg: {p.weight_kg || 0.5}kg • {p.length_cm || 10}x{p.breadth_cm || 10}x{p.height_cm || 5}cm
+                                    </span>
+                                    {variantsList.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {variantsList.slice(0, 3).map((v, vi) => (
+                                          <span key={vi} className="text-[9px] font-semibold bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">
+                                            {[v.color, v.size].filter(Boolean).join(' / ')}: {v.stock}
+                                          </span>
+                                        ))}
+                                        {variantsList.length > 3 && (
+                                          <span className="text-[9px] text-[#5b21b6] font-bold">+{variantsList.length - 3} more</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-4 px-5">
+                                <span className="text-xs font-semibold text-[#12100e] block">{p.category_name || 'General'}</span>
+                                <span className="text-[10px] font-mono text-[#9490b8] block">{p.sku || 'NO-SKU'}</span>
+                              </td>
+                              <td className="py-4 px-5">
+                                {Array.isArray(p.tiers) && p.tiers.length > 0 ? (
+                                  <div className="space-y-0.5">
+                                    <span className="text-xs font-bold text-[#5b21b6] block">
+                                      {formatCurrency(p.tiers[0]?.price || 0)} (Solo)
+                                    </span>
+                                    {p.tiers.length > 1 && (
+                                      <span className="text-[10px] text-[#059669] font-bold block">
+                                        Team: {formatCurrency(p.tiers[p.tiers.length - 1]?.price || 0)}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-400 italic">No tiers</span>
+                                )}
+                              </td>
+                              <td className="py-4 px-5">
+                                <span className="text-xs font-black text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-lg">
+                                  {p.units_ordered || 0} units
+                                </span>
+                              </td>
+                              <td className="py-4 px-5">
+                                {isOutOfStock ? (
+                                  <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-200 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-600" /> Out of Stock (0)
+                                  </span>
+                                ) : isLowStock ? (
+                                  <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600" /> Low Stock ({p.stock})
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" /> {p.stock} In Stock
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-4 px-5">
+                                {p.status === 'active' ? (
+                                  <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-black uppercase">
+                                    Active
+                                  </span>
+                                ) : p.status === 'pending' ? (
+                                  <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-black uppercase">
+                                    Pending Review
+                                  </span>
+                                ) : (
+                                  <div>
+                                    <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-black uppercase block">
+                                      Rejected
+                                    </span>
+                                    {p.reject_reason && (
+                                      <span className="text-[9px] text-red-500 line-clamp-1 mt-0.5" title={p.reject_reason}>
+                                        {p.reject_reason}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-4 px-5 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleOpenEditProduct(p)}
+                                    className="bg-[rgba(91,33,182,0.08)] hover:bg-[#5b21b6] text-[#5b21b6] hover:text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 border border-[rgba(91,33,182,0.15)]"
+                                  >
+                                    <Edit3 size={12} /> Edit Tiers
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRestockModal(p)}
+                                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5"
+                                  >
+                                    <Package size={12} /> Stock
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()
+          )}
+        </div>
+      )}
+
+      {/* TAB: PAYMENTS & FINANCIALS */}
+      {activeTab === 'payments' && (
+        <div key={activeTab} className="space-y-6 animate-tab-morph">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Merchant Payments & Payouts</h2>
+              <p className="text-xs text-[#6b6560] mt-0.5">Real-time revenue accounting, platform commission deductions, and per-order financial ledger.</p>
+            </div>
+            <button
+              onClick={exportEarningsCSV}
+              className="bg-[#059669] text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 hover:bg-[#047857] transition-all cursor-pointer"
+            >
+              <Download size={14} /> Export CSV Ledger
+            </button>
+          </div>
+
+          {/* Earnings KPI Cards */}
+          {(() => {
+            const grossSales = orders.reduce((acc, o) => acc + (o.status !== 'cancelled' ? parseFloat(o.total_amount || 0) : 0), 0);
+            const totalCommission = orders.reduce((acc, o) => acc + (o.status !== 'cancelled' ? ((parseFloat(o.total_amount || 0) * parseFloat(o.commission_pct || 5)) / 100) : 0), 0);
+            const netEarnings = grossSales - totalCommission;
+            const deliveredPayout = orders.filter(o => o.status === 'delivered' || o.shipment_status === 'delivered').reduce((acc, o) => acc + (parseFloat(o.total_amount || 0) * (1 - (parseFloat(o.commission_pct || 5) / 100))), 0);
+            const escrowPending = netEarnings - deliveredPayout;
+
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-[#9490b8] font-bold uppercase mb-2">
+                    <span>Gross Marketplace Sales</span>
+                    <ShoppingCart size={16} className="text-[#5b21b6]" />
+                  </div>
+                  <strong className="text-2xl font-display font-black text-[#12100e] block">{formatCurrency(grossSales)}</strong>
+                  <span className="text-[10px] text-[#6b6560] mt-1 block">From {orders.filter(o => o.status !== 'cancelled').length} successful orders</span>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-[#9490b8] font-bold uppercase mb-2">
+                    <span>Platform Commission</span>
+                    <Tag size={16} className="text-[#f05035]" />
+                  </div>
+                  <strong className="text-2xl font-display font-black text-[#f05035] block">{formatCurrency(totalCommission)}</strong>
+                  <span className="text-[10px] text-[#6b6560] mt-1 block">Auto-deducted marketplace service fee</span>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm bg-gradient-to-br from-[rgba(5,150,105,0.04)] to-transparent">
+                  <div className="flex items-center justify-between text-xs text-[#059669] font-bold uppercase mb-2">
+                    <span>Net Seller Earnings</span>
+                    <TrendingUp size={16} className="text-[#059669]" />
+                  </div>
+                  <strong className="text-2xl font-display font-black text-[#059669] block">{formatCurrency(netEarnings)}</strong>
+                  <span className="text-[10px] text-[#6b6560] mt-1 block">Net payout after platform commission</span>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-[#9490b8] font-bold uppercase mb-2">
+                    <span>Delivered (Payout Ready)</span>
+                    <CheckCircle2 size={16} className="text-[#4338ca]" />
+                  </div>
+                  <strong className="text-2xl font-display font-black text-[#4338ca] block">{formatCurrency(deliveredPayout)}</strong>
+                  <span className="text-[10px] text-[#6b6560] mt-1 block">Escrow hold: {formatCurrency(Math.max(0, escrowPending))}</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Orders Financial Ledger Table */}
+          <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#12100e] uppercase">Order Earnings & Payout Breakdown</h3>
+              <span className="text-xs text-[#9490b8] font-semibold">{orders.length} Total Orders</span>
+            </div>
+
+            {orders.length === 0 ? (
+              <div className="p-12 text-center">
+                <DollarSign size={40} className="mx-auto text-gray-300 mb-2" />
+                <h4 className="text-sm font-bold text-[#12100e]">No Sales History Yet</h4>
+                <p className="text-xs text-[#6b6560] mt-1">When buyers purchase your products, the financial transaction details will appear here.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-[#faf8f4]">
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Order ID & Date</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Product / Variant</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Buyer & Mode</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Gross Price</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Commission Cut</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Your Net Payout</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Delivery Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map(ord => {
+                      const commCut = ((parseFloat(ord.total_amount) * parseFloat(ord.commission_pct || 5)) / 100);
+                      const netPayout = parseFloat(ord.total_amount) - commCut;
+                      const variantPill = [ord.color, ord.size].filter(Boolean).join(' / ');
+
+                      return (
+                        <tr key={ord.id} className="border-b border-gray-100 last:border-none hover:bg-gray-50/80 transition-colors">
+                          <td className="py-4 px-5">
+                            <span className="font-mono text-xs font-bold text-[#5b21b6] block">#ORD-{ord.id}</span>
+                            <span className="text-[10px] text-[#9490b8] block mt-0.5">
+                              {new Date(ord.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className="text-xs font-bold text-[#12100e] block line-clamp-1">{ord.product_name}</span>
+                            {variantPill && (
+                              <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                {variantPill}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className="text-xs font-semibold text-[#12100e] block">{ord.buyer_name}</span>
+                            <span className={`inline-flex items-center text-[9px] font-black uppercase px-2 py-0.5 rounded mt-0.5 ${
+                              ord.is_cod ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {ord.is_cod ? 'Cash on Delivery' : 'Prepaid Online'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <strong className="text-xs font-black text-[#12100e] block">{formatCurrency(ord.total_amount)}</strong>
+                            <span className="text-[10px] text-[#9490b8]">Qty: {ord.quantity}</span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className="text-xs font-bold text-[#f05035] block">-{formatCurrency(commCut)}</span>
+                            <span className="text-[10px] text-[#9490b8] block">Rate: {ord.commission_pct || 5}%</span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <strong className="text-sm font-black text-[#059669] block">+{formatCurrency(netPayout)}</strong>
+                            <span className="text-[9px] text-emerald-600 font-bold block">Credit Net</span>
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
+                              ord.shipment_status === 'delivered' ? 'bg-green-100 text-green-700' :
+                              ord.shipment_status === 'in_transit' ? 'bg-blue-100 text-blue-700' :
+                              ord.shipment_status === 'pickup_scheduled' ? 'bg-purple-100 text-purple-700' :
+                              ord.status === 'confirmed' ? 'bg-amber-100 text-amber-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {ord.shipment_status ? ord.shipment_status.replace('_', ' ') : ord.status}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setInvoiceModalOrder(ord)}
+                              className="text-[10px] text-[#5b21b6] font-bold hover:underline flex items-center gap-1 mt-1 cursor-pointer"
+                              title="View / Print Official GST Tax Invoice"
+                            >
+                              <FileText size={10} /> Tax Invoice
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: RETURNS & REFUNDS */}
+      {activeTab === 'returns' && (
+        <div key={activeTab} className="space-y-6 animate-tab-morph max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Customer Return Requests</h2>
+              <p className="text-xs text-[#6b6560] mt-0.5">Manage customer return requests, approve pickups, and track refund eligibility within the 7-day policy.</p>
+            </div>
+            <button
+              onClick={fetchSellerReturns}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-colors self-start cursor-pointer"
+            >
+              <RefreshCw size={13} className={returnsLoading ? 'animate-spin' : ''} /> Refresh
+            </button>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border border-[rgba(99,102,241,0.1)] rounded-2xl p-4 shadow-sm">
+              <span className="text-[11px] font-bold text-[#6b6560] uppercase tracking-wider block">Total Returns</span>
+              <strong className="text-xl font-display font-extrabold text-[#12100e] block mt-1">{sellerReturns.length}</strong>
+            </div>
+            <div className="bg-amber-50/70 border border-amber-200/60 rounded-2xl p-4 shadow-sm">
+              <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider block">Needs Action</span>
+              <strong className="text-xl font-display font-extrabold text-amber-900 block mt-1">
+                {sellerReturns.filter(r => r.status === 'requested').length}
+              </strong>
+            </div>
+            <div className="bg-blue-50/70 border border-blue-200/60 rounded-2xl p-4 shadow-sm">
+              <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">Pickup Scheduled</span>
+              <strong className="text-xl font-display font-extrabold text-blue-900 block mt-1">
+                {sellerReturns.filter(r => r.status === 'seller_approved').length}
+              </strong>
+            </div>
+            <div className="bg-emerald-50/70 border border-emerald-200/60 rounded-2xl p-4 shadow-sm">
+              <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">100% Refunded</span>
+              <strong className="text-xl font-display font-extrabold text-emerald-900 block mt-1">
+                {sellerReturns.filter(r => r.status === 'refunded').length}
+              </strong>
+            </div>
+          </div>
+
+          {/* Returns Table */}
+          <div className="table-container-v2">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <span className="text-xs font-bold text-[#1e1b4b]">Return Cases List</span>
+              <span className="text-[11px] text-[#9490b8] font-semibold">{sellerReturns.length} Total</span>
+            </div>
+
+            {returnsLoading ? (
+              <div className="p-12 text-center text-xs text-[#9490b8] flex flex-col items-center justify-center gap-2">
+                <RefreshCw size={24} className="animate-spin text-[#5b21b6]" />
+                <span>Loading return requests...</span>
+              </div>
+            ) : sellerReturns.length === 0 ? (
+              <div className="p-12 text-center text-xs text-[#9490b8]">
+                <RotateCcw size={32} className="mx-auto mb-2 text-gray-300" />
+                <strong className="text-sm font-bold text-[#12100e] block mb-1">No Return Requests Found</strong>
+                <span>All customer orders are in good standing with zero returns pending.</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50/50">
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Order & Date</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Product</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Customer</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Return Reason</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Refund Value</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Status & Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-xs">
+                    {sellerReturns.map(ret => (
+                      <tr key={ret.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-4 px-5">
+                          <span className="font-mono text-xs font-bold text-[#5b21b6] block">#ORD-{ret.order_id}</span>
+                          <span className="text-[10px] text-[#9490b8] block mt-0.5">
+                            {new Date(ret.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        </td>
+                        <td className="py-4 px-5">
+                          <strong className="text-xs font-bold text-[#12100e] block line-clamp-1">{ret.product_name}</strong>
+                          <span className="text-[10px] text-[#6b6560]">SKU: {ret.product_sku || 'N/A'}</span>
+                        </td>
+                        <td className="py-4 px-5">
+                          <span className="text-xs font-semibold text-[#12100e] block">{ret.buyer_name}</span>
+                          <span className="text-[10px] text-[#6b6560] block">{ret.buyer_phone}</span>
+                        </td>
+                        <td className="py-4 px-5 max-w-[220px]">
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase mb-1">
+                            {ret.reason.replace(/_/g, ' ')}
+                          </span>
+                          {ret.description && (
+                            <p className="text-[11px] text-[#6b6560] line-clamp-2">{ret.description}</p>
+                          )}
+                          {ret.seller_note && (
+                            <p className="text-[10px] text-[#5b21b6] font-semibold mt-1">Your note: {ret.seller_note}</p>
+                          )}
+                        </td>
+                        <td className="py-4 px-5">
+                          <strong className="text-xs font-black text-[#12100e] block">{formatCurrency(ret.refund_amount)}</strong>
+                          <span className="text-[9px] text-[#059669] font-bold">100% Full Refund</span>
+                        </td>
+                        <td className="py-4 px-5">
+                          {ret.status === 'requested' ? (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setReturnActionModal({ returnReq: ret, action: 'approve', note: '' })}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1.5 rounded-lg text-[11px] cursor-pointer transition-colors shadow-sm"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => setReturnActionModal({ returnReq: ret, action: 'reject', note: '' })}
+                                className="border border-red-300 text-red-600 hover:bg-red-50 font-bold px-2.5 py-1.5 rounded-lg text-[11px] cursor-pointer transition-colors"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : ret.status === 'seller_approved' ? (
+                            <button
+                              onClick={() => handleMarkPickupDone(ret.id)}
+                              className="bg-[#4338ca] hover:bg-[#3730a3] text-white font-bold px-2.5 py-1.5 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                            >
+                              <Truck size={12} /> Confirm Pickup
+                            </button>
+                          ) : (
+                            <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
+                              ret.status === 'refunded' ? 'bg-emerald-100 text-emerald-800' :
+                              ret.status === 'pickup_done' ? 'bg-blue-100 text-blue-800' :
+                              ret.status === 'seller_rejected' ? 'bg-red-100 text-red-800' :
+                              ret.status === 'admin_approved' ? 'bg-purple-100 text-purple-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {ret.status.replace(/_/g, ' ')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: SUPPORT HELPDESK / RAISE TICKETS */}
+      {activeTab === 'tickets' && (
+        <div key={activeTab} className="space-y-6 animate-tab-morph max-w-5xl mx-auto">
+          <div>
+            <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Merchant Support Helpdesk</h2>
+            <p className="text-xs text-[#6b6560] mt-0.5">Need assistance with your catalog, orders, payouts, or Shiprocket logistics? Raise a ticket directly with our operations team.</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Form: Raise New Ticket */}
+            <div className="lg:col-span-1 bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-4 h-fit">
+              <h3 className="text-sm font-bold font-display text-[#12100e] flex items-center gap-2 border-b border-gray-100 pb-3">
+                <MessageSquare className="text-[#5b21b6]" size={18} />
+                Raise New Ticket
+              </h3>
+
+              <form onSubmit={handleCreateTicket} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#6b6560] uppercase">Issue Category</label>
+                  <select
+                    value={ticketCategory}
+                    onChange={(e) => setTicketCategory(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-[#12100e] font-semibold focus:outline-none focus:border-[#5b21b6]"
+                    required
+                  >
+                    <option value="payments_payouts">Payments & Payouts</option>
+                    <option value="order_issue">Order Issue / Dispute</option>
+                    <option value="product_listing">Product Listing & Approval</option>
+                    <option value="account_kyc">Account & KYC Verification</option>
+                    <option value="technical_bug">Technical Bug / App Issue</option>
+                    <option value="shiprocket_delivery">Shiprocket & Delivery Logistics</option>
+                    <option value="other">Other Inquiry</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#6b6560] uppercase">Subject</label>
+                  <input
+                    type="text"
+                    placeholder="Brief summary of your query..."
+                    value={ticketSubject}
+                    onChange={(e) => setTicketSubject(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#6b6560] uppercase">Detailed Description</label>
+                  <textarea
+                    rows={4}
+                    placeholder="Provide relevant details (order numbers, SKU, screenshots if applicable)..."
+                    value={ticketDescription}
+                    onChange={(e) => setTicketDescription(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={ticketSubmitting}
+                  className="w-full bg-[#5b21b6] hover:bg-[#4338ca] text-white font-bold py-3 rounded-xl text-xs transition-all shadow-md shadow-violet-500/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {ticketSubmitting ? <RefreshCw className="animate-spin" size={14} /> : <LifeBuoy size={14} />}
+                  {ticketSubmitting ? 'Submitting...' : 'Submit Support Ticket'}
+                </button>
+              </form>
+            </div>
+
+            {/* List: My Tickets History */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-[#12100e] uppercase">Your Support History</h3>
+                <span className="text-xs text-[#9490b8] font-semibold">{myTickets.length} Tickets</span>
+              </div>
+
+              {ticketsLoading ? (
+                <div className="bg-white rounded-3xl p-12 text-center border border-gray-200 shadow-sm">
+                  <RefreshCw className="animate-spin text-[#5b21b6] mx-auto mb-2" size={24} />
+                  <p className="text-xs text-[#6b6560]">Loading your tickets...</p>
+                </div>
+              ) : myTickets.length === 0 ? (
+                <div className="bg-white border border-gray-200 rounded-3xl p-12 text-center shadow-sm">
+                  <LifeBuoy size={40} className="mx-auto text-gray-300 mb-2" />
+                  <h4 className="text-sm font-bold text-[#12100e]">No Support Tickets Yet</h4>
+                  <p className="text-xs text-[#6b6560] mt-1">If you ever need help, use the form to reach our dedicated operations team.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {myTickets.map(t => {
+                    const categoryLabels = {
+                      payments_payouts: 'Payments & Payouts',
+                      order_issue: 'Order Issue',
+                      product_listing: 'Product Listing',
+                      account_kyc: 'Account & KYC',
+                      technical_bug: 'Technical Bug',
+                      shiprocket_delivery: 'Shiprocket & Delivery',
+                      other: 'Other'
+                    };
+
+                    return (
+                      <div key={t.id} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-[#5b21b6]">#TKT-{t.id}</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700">
+                              {categoryLabels[t.category] || t.category}
+                            </span>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            t.status === 'open' ? 'bg-amber-100 text-amber-700' :
+                            t.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {t.status.replace('_', ' ')}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-sm font-bold text-[#12100e] mb-1">{t.subject}</h4>
+                          <p className="text-xs text-[#4b4642] leading-relaxed whitespace-pre-wrap">{t.description}</p>
+                        </div>
+
+                        {t.admin_note && (
+                          <div className="bg-violet-50 border border-violet-100 rounded-xl p-3 text-xs text-[#5b21b6] space-y-1">
+                            <div className="font-bold uppercase text-[10px] flex items-center gap-1">
+                              <ShieldCheck size={12} /> Operations Team Response:
+                            </div>
+                            <p className="text-[#3b2d54] whitespace-pre-wrap">{t.admin_note}</p>
+                          </div>
+                        )}
+
+                        <div className="text-[10px] text-[#9490b8] pt-1 flex justify-between">
+                          <span>Created: {new Date(t.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                          {t.updated_at && <span>Last Updated: {new Date(t.updated_at).toLocaleDateString('en-IN')}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -842,7 +2052,7 @@ export default function SellerPanel() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs text-[#9490b8] font-semibold uppercase">Category Mapping</label>
                 <select
@@ -868,8 +2078,77 @@ export default function SellerPanel() {
                   required
                 />
               </div>
+            </div>
 
-              <div className="space-y-2 sm:col-span-3">
+            {/* Package Dimensions for Shiprocket Shipping */}
+            <div className="bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-2xl p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Truck size={16} className="text-[#4338ca]" />
+                  <span className="text-xs font-bold text-[#1e1b4b]">Shipping & Package Dimensions (Shiprocket)</span>
+                </div>
+                <span className="text-[10px] text-[#9490b8]">Required for live courier rates & dispatch</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#9490b8] font-bold uppercase">Weight (kg)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="0.5"
+                    value={weightKg}
+                    onChange={(e) => setWeightKg(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2 px-3 text-xs text-[#1e1b4b]"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#9490b8] font-bold uppercase">Length (cm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.5"
+                    placeholder="10"
+                    value={lengthCm}
+                    onChange={(e) => setLengthCm(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2 px-3 text-xs text-[#1e1b4b]"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#9490b8] font-bold uppercase">Breadth (cm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.5"
+                    placeholder="10"
+                    value={breadthCm}
+                    onChange={(e) => setBreadthCm(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2 px-3 text-xs text-[#1e1b4b]"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#9490b8] font-bold uppercase">Height (cm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.5"
+                    placeholder="5"
+                    value={heightCm}
+                    onChange={(e) => setHeightCm(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2 px-3 text-xs text-[#1e1b4b]"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Media Uploads Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <label className="text-xs text-[#9490b8] font-semibold uppercase">Product Images (Up to 10)</label>
                 <div className="flex flex-wrap gap-4 items-center">
                   {imageUrls.map((url, i) => (
@@ -906,7 +2185,7 @@ export default function SellerPanel() {
                 </div>
               </div>
 
-              <div className="space-y-2 sm:col-span-3">
+              <div className="space-y-2">
                 <label className="text-xs text-[#9490b8] font-semibold uppercase">Product Videos (Up to 2)</label>
                 <div className="flex flex-wrap gap-4 items-center">
                   {videoUrls.map((url, i) => (
@@ -944,97 +2223,170 @@ export default function SellerPanel() {
               </div>
             </div>
 
-            {/* Product Variants Section */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4 shadow-sm">
-              <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-                <Tag size={16} className="text-[#5b21b6]" />
-                <span className="text-xs font-bold text-[#12100e] uppercase">Product Variants (Optional)</span>
+            {/* Product Variants Section (Flexible Dimensions & Units) */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-5 shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Tag size={16} className="text-[#5b21b6]" />
+                  <span className="text-xs font-bold text-[#12100e] uppercase">Product Variants (Colors, Sizes & Units)</span>
+                </div>
+                {variantsMatrix.length > 0 && (
+                  <span className="text-[10px] font-bold text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-lg">
+                    {variantsMatrix.length} Variant Combinations Active
+                  </span>
+                )}
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3 md:col-span-2">
-                  <label className="text-xs text-[#9490b8] font-semibold uppercase">Colors</label>
+              <div className="space-y-4">
+                {/* 1. Colors Selector */}
+                <div className="space-y-2">
+                  <label className="text-xs text-[#9490b8] font-semibold uppercase flex items-center justify-between">
+                    <span>Available Colors (Optional)</span>
+                    {selectedColors.length > 0 && <span className="text-[#5b21b6] font-bold text-[11px]">{selectedColors.length} selected</span>}
+                  </label>
                   <div className="flex flex-wrap gap-2">
-                    {PREDEFINED_COLORS.map(color => (
-                      <button
-                        key={color.name}
-                        type="button"
-                        onClick={() => toggleColor(color.name)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${selectedColors.includes(color.name) ? 'border-[#5b21b6] bg-[rgba(91,33,182,0.1)] text-[#5b21b6]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
-                      >
-                        <span className="w-3 h-3 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: color.hex }}></span>
-                        {color.name}
-                      </button>
-                    ))}
+                    {PREDEFINED_COLORS.map(color => {
+                      const isSel = selectedColors.includes(color.name);
+                      return (
+                        <button
+                          key={color.name}
+                          type="button"
+                          onClick={() => handleColorToggle(color.name)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                            isSel 
+                              ? 'border-[#5b21b6] bg-[rgba(91,33,182,0.1)] text-[#5b21b6] font-bold shadow-sm' 
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          <span className="w-3 h-3 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: color.hex }} />
+                          {color.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs text-[#9490b8] font-semibold uppercase">Sizes (Comma separated)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. S, M, L, XL"
-                    value={sizesInput}
-                    onChange={(e) => setSizesInput(e.target.value)}
-                    className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-3 px-4 text-xs text-[#1e1b4b]"
-                  />
-                </div>
-              </div>
-              
-              <button
-                type="button"
-                onClick={handleGenerateVariants}
-                className="bg-[rgba(91,33,182,0.1)] text-[#5b21b6] font-bold text-xs py-2 px-4 rounded-xl border border-[rgba(91,33,182,0.2)] hover:bg-[rgba(91,33,182,0.15)] transition-colors"
-              >
-                Generate Variant Combinations
-              </button>
 
+                {/* 2. Variant Dimension Type & Presets */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#9490b8] font-semibold uppercase">Variant Measurement Type</label>
+                    <select
+                      value={variantDimensionType}
+                      onChange={(e) => handleDimensionTypeChange(e.target.value)}
+                      className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2.5 px-3.5 text-xs text-[#1e1b4b] font-semibold focus:outline-none focus:border-[#5b21b6]"
+                    >
+                      {Object.entries(VARIANT_DIMENSION_PRESETS).map(([key, config]) => (
+                        <option key={key} value={key}>{config.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-[#9490b8]">Select product type: clothing, waist inches, footwear, liquids (mL), weights (g/kg), etc.</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#9490b8] font-semibold uppercase">
+                      Custom Values / Input (Comma Separated)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={VARIANT_DIMENSION_PRESETS[variantDimensionType]?.placeholder || "e.g. S, M, L or 500mL, 1L"}
+                      value={sizesInput}
+                      onChange={handleSizesChange}
+                      className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2.5 px-3.5 text-xs text-[#1e1b4b] placeholder-gray-400 focus:outline-none focus:border-[#5b21b6]"
+                    />
+                    <p className="text-[10px] text-[#9490b8]">You can click presets below or type custom sizes/volumes manually.</p>
+                  </div>
+                </div>
+
+                {/* Quick Preset Buttons */}
+                {VARIANT_DIMENSION_PRESETS[variantDimensionType]?.presets.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] font-bold text-[#6b6560] block uppercase tracking-wider">Quick Preset Chips:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {VARIANT_DIMENSION_PRESETS[variantDimensionType].presets.map(p => {
+                        const isSel = selectedPresetSizes.includes(p);
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => handleTogglePresetSize(p)}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              isSel
+                                ? 'bg-[#5b21b6] text-white shadow-sm'
+                                : 'bg-[#faf8f4] text-[#6b6560] border border-gray-200 hover:border-[#5b21b6] hover:text-[#5b21b6]'
+                            }`}
+                          >
+                            {isSel ? `✓ ${p}` : `+ ${p}`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Variant Matrix Table */}
               {variantsMatrix.length > 0 && (
-                <div className="mt-4">
-                  <table className="w-full text-left border-collapse">
+                <div className="mt-4 pt-3 border-t border-gray-100 overflow-x-auto">
+                  <div className="text-xs font-bold text-[#12100e] mb-2 uppercase">Configured Variant Matrix</div>
+                  <table className="w-full text-left border-collapse min-w-[500px]">
                     <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="py-2 text-xs font-bold text-[#6b6560]">Color</th>
-                        <th className="py-2 text-xs font-bold text-[#6b6560]">Size</th>
-                        <th className="py-2 text-xs font-bold text-[#6b6560]">Stock Quantity</th>
-                        <th className="py-2 text-xs font-bold text-[#6b6560]">Variant Image</th>
+                      <tr className="border-b border-gray-200 bg-[#faf8f4]">
+                        <th className="py-2.5 px-3 text-xs font-bold text-[#6b6560]">Color</th>
+                        <th className="py-2.5 px-3 text-xs font-bold text-[#6b6560]">Size / Volume</th>
+                        <th className="py-2.5 px-3 text-xs font-bold text-[#6b6560]">Stock Available</th>
+                        <th className="py-2.5 px-3 text-xs font-bold text-[#6b6560]">Variant Image</th>
                       </tr>
                     </thead>
                     <tbody>
                       {variantsMatrix.map((variant, idx) => (
-                        <tr key={idx} className="border-b border-gray-50 last:border-none">
-                          <td className="py-3 text-xs text-[#12100e] font-semibold">
+                        <tr key={idx} className="border-b border-gray-50 last:border-none hover:bg-gray-50">
+                          <td className="py-3 px-3 text-xs text-[#12100e] font-semibold">
                             <span className="flex items-center gap-1.5">
                               {PREDEFINED_COLORS.find(c => c.name === variant.color) && (
                                 <span className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: PREDEFINED_COLORS.find(c => c.name === variant.color).hex }}></span>
                               )}
-                              {variant.color}
+                              {variant.color || <span className="text-gray-400 italic">Default</span>}
                             </span>
                           </td>
-                          <td className="py-3 text-xs text-[#12100e] font-semibold">{variant.size}</td>
-                          <td className="py-3">
+                          <td className="py-3 px-3 text-xs text-[#12100e] font-bold">
+                            <span className="bg-gray-100 px-2 py-0.5 rounded text-[11px] text-[#12100e]">
+                              {variant.size || <span className="text-gray-400 italic">Standard</span>}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
                             <input
                               type="number"
                               min="0"
                               value={variant.stock}
                               onChange={(e) => handleVariantStockChange(idx, e.target.value)}
-                              className="w-24 bg-[#faf8f4] border border-gray-200 rounded-lg py-1.5 px-3 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                              className="w-24 bg-[#faf8f4] border border-gray-200 rounded-lg py-1.5 px-3 text-xs text-[#12100e] font-bold focus:outline-none focus:border-[#5b21b6]"
                             />
                           </td>
-                          <td className="py-3">
+                          <td className="py-3 px-3">
                             {variant.image_url ? (
-                              <div className="relative w-10 h-10 rounded overflow-hidden group">
+                              <div className="relative w-10 h-10 rounded-lg overflow-hidden group">
                                 <img src={variant.image_url} className="w-full h-full object-cover" />
                                 <button type="button" onClick={() => {
                                   const updated = [...variantsMatrix];
                                   updated[idx].image_url = null;
                                   setVariantsMatrix(updated);
-                                }} className="absolute inset-0 bg-black/50 text-white text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100">Clear</button>
+                                }} className="absolute inset-0 bg-black/60 text-white text-[9px] flex items-center justify-center opacity-0 group-hover:opacity-100 font-bold">Remove</button>
                               </div>
                             ) : (
                               <div>
-                                <input type="file" accept="image/*" id={`var-img-${idx}`} className="hidden" onChange={(e) => handleVariantImageUpload(idx, e)} />
-                                <label htmlFor={`var-img-${idx}`} className="cursor-pointer text-[10px] bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200 hover:bg-gray-200">
-                                  Upload
+                                <input type="file" accept="image/*" id={`var-img-${idx}`} className="hidden" onChange={(e) => {
+                                  const file = e.target.files[0];
+                                  if (!file) return;
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    const updated = [...variantsMatrix];
+                                    updated[idx].image_url = reader.result;
+                                    setVariantsMatrix(updated);
+                                  };
+                                  reader.readAsDataURL(file);
+                                }} />
+                                <label htmlFor={`var-img-${idx}`} className="cursor-pointer text-[10px] font-bold bg-white text-[#5b21b6] px-2.5 py-1 rounded-lg border border-[#5b21b6]/20 hover:bg-[#5b21b6]/10 inline-flex items-center gap-1">
+                                  <UploadCloud size={10} /> Photo
                                 </label>
                               </div>
                             )}
@@ -1336,55 +2688,466 @@ export default function SellerPanel() {
         </div>
       )}
 
-      {/* DISPATCH COURIER MODAL */}
-      {shippingOrderId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-md glass-panel rounded-3xl p-6 md:p-8 space-y-6 relative border border-[rgba(99,102,241,0.15)] glow-cyan">
-            
-            <h3 className="text-xl font-bold font-display text-[#1e1b4b]">Fulfill & Dispatch Order #{shippingOrderId}</h3>
-            
-            <form onSubmit={handleShipOrder} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#9490b8] font-bold uppercase">Courier Name / Shipping Provider</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Delhivery, BlueDart, DHL"
-                  value={courierName}
-                  onChange={(e) => setCourierName(e.target.value)}
-                  className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2.5 px-3.5 text-xs text-[#1e1b4b]"
-                  required
+      {/* SHIPROCKET 2-STEP MANUAL DISPATCH MODAL */}
+      {shipModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-xl bg-white rounded-3xl p-6 md:p-8 space-y-6 relative border border-gray-200 shadow-2xl">
+            <button 
+              onClick={() => setShipModalOrder(null)} 
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <X size={20}/>
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-[#4338ca] flex items-center justify-center">
+                <Truck size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold font-display text-[#1e1b4b]">
+                  Shiprocket Dispatch — Order #{shipModalOrder.id}
+                </h3>
+                <p className="text-xs text-[#9490b8]">
+                  {shipStep === 1 ? 'Step 1: Order & Dimensions Verification' : 'Step 2: Select Courier Partner'}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 1: Verification & Generate Couriers */}
+            {shipStep === 1 && (
+              <div className="space-y-4">
+                <div className="bg-[#faf8f4] border border-gray-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#6b6560]">Product:</span>
+                    <strong className="text-[#12100e] text-right">{shipModalOrder.product_name}</strong>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#6b6560]">Buyer Destination:</span>
+                    <strong className="text-[#12100e] text-right">{shipModalOrder.shipping_address}</strong>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#6b6560]">Payment Type:</span>
+                    <strong className={`uppercase ${shipModalOrder.is_cod ? 'text-amber-600' : 'text-green-600'}`}>
+                      {shipModalOrder.is_cod ? 'Cash on Delivery (COD)' : 'Prepaid (Online)'}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between text-xs pt-2 border-t border-gray-200">
+                    <span className="text-[#6b6560]">Package Dimensions:</span>
+                    <span className="text-[#12100e] font-mono font-semibold">
+                      {shipModalOrder.product_weight_kg || 0.5}kg | {shipModalOrder.product_length_cm || 10}x{shipModalOrder.product_breadth_cm || 10}x{shipModalOrder.product_height_cm || 5}cm
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-3.5 flex items-start gap-2.5">
+                  <ShieldCheck size={18} className="text-[#4338ca] flex-shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-[#4c4775] leading-relaxed">
+                    Clicking below will register this shipment on your Shiprocket account and fetch live courier rates, estimated delivery times, and coverage for the buyer's destination.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShipModalOrder(null)}
+                    className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateShipmentStep1}
+                    disabled={shipLoading}
+                    className="flex-[2] bg-[#4338ca] text-white rounded-xl py-3 text-xs font-bold flex items-center justify-center gap-2 hover:bg-[#3730a3] disabled:opacity-50 cursor-pointer shadow-md shadow-indigo-500/20"
+                  >
+                    {shipLoading ? 'Connecting to Shiprocket...' : 'Find Available Couriers & Rates →'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Courier Selection */}
+            {shipStep === 2 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#1e1b4b] uppercase tracking-wider">
+                    Available Courier Partners ({availableCouriers.length})
+                  </label>
+                  <button 
+                    onClick={handleCreateShipmentStep1}
+                    className="text-[11px] text-[#4338ca] font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <RefreshCw size={12}/> Refresh Rates
+                  </button>
+                </div>
+
+                {availableCouriers.length === 0 ? (
+                  <div className="p-6 text-center bg-gray-50 rounded-2xl border border-gray-200">
+                    <p className="text-xs text-[#6b6560]">No couriers found for this route or pincode.</p>
+                  </div>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
+                    {availableCouriers.map((c) => {
+                      const isSelected = selectedCourier?.courier_company_id === c.courier_company_id;
+                      return (
+                        <div
+                          key={c.courier_company_id}
+                          onClick={() => setSelectedCourier(c)}
+                          className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                            isSelected
+                              ? 'border-[#4338ca] bg-indigo-50/60 shadow-sm ring-2 ring-[#4338ca]/20'
+                              : 'border-gray-200 hover:border-gray-300 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                              isSelected ? 'border-[#4338ca] bg-[#4338ca]' : 'border-gray-300'
+                            }`}>
+                              {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                            </div>
+                            <div>
+                              <strong className="text-xs font-bold text-[#1e1b4b] block">{c.courier_name}</strong>
+                              <span className="text-[10px] text-[#9490b8]">Est. Delivery: {c.estimated_delivery_days}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-sm font-black text-[#5b21b6] block">₹{c.rate}</span>
+                            {c.cod_available ? (
+                              <span className="text-[9px] font-bold text-green-600 uppercase">COD Supported</span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-gray-400 uppercase">Prepaid Only</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShipStep(1)}
+                    className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                  >
+                    &larr; Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAssignCourierStep2}
+                    disabled={!selectedCourier || shipLoading}
+                    className="flex-[2] bg-green-600 text-white rounded-xl py-3 text-xs font-bold flex items-center justify-center gap-2 hover:bg-green-700 disabled:opacity-50 cursor-pointer shadow-md shadow-green-600/20"
+                  >
+                    {shipLoading ? 'Generating AWB & Scheduling...' : `Confirm & Dispatch (${selectedCourier ? selectedCourier.courier_name : 'Select Courier'})`}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* LIVE TRACKING MODAL */}
+      {trackingModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 md:p-8 space-y-6 relative border border-gray-200 shadow-2xl">
+            <button 
+              onClick={() => { setTrackingModalOrder(null); setTrackingData(null); }} 
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <X size={20}/>
+            </button>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#4338ca] bg-indigo-50 px-2.5 py-1 rounded-full">
+                Shiprocket Tracking
+              </span>
+              <h3 className="text-xl font-bold font-display text-[#1e1b4b] mt-2">
+                Order #{trackingModalOrder.id}
+              </h3>
+              <p className="text-xs text-[#6b6560] font-mono mt-0.5">
+                AWB: <strong className="text-[#1e1b4b]">{trackingModalOrder.awb_code || trackingModalOrder.tracking_number || 'N/A'}</strong> | Courier: {trackingModalOrder.courier_name_sr || trackingModalOrder.courier_name || 'Assigned Courier'}
+              </p>
+            </div>
+
+            {trackingLoading ? (
+              <div className="py-12 text-center text-xs text-[#9490b8] animate-pulse">
+                Fetching latest shipment status from Shiprocket...
+              </div>
+            ) : trackingData?.events && trackingData.events.length > 0 ? (
+              <div className="max-h-72 overflow-y-auto space-y-4 pr-2">
+                {trackingData.events.map((ev, idx) => (
+                  <div key={idx} className="flex items-start gap-3 relative">
+                    {idx < trackingData.events.length - 1 && (
+                      <div className="absolute left-2.5 top-6 bottom-0 w-0.5 bg-indigo-100" />
+                    )}
+                    <div className="w-5 h-5 rounded-full bg-[#4338ca] text-white flex items-center justify-center flex-shrink-0 z-10 text-[10px]">
+                      ✓
+                    </div>
+                    <div className="flex-1 pb-3">
+                      <div className="flex items-center justify-between">
+                        <strong className="text-xs font-bold text-[#1e1b4b] uppercase">{ev.status}</strong>
+                        <span className="text-[10px] text-[#9490b8]">{ev.activity_at ? new Date(ev.activity_at).toLocaleString() : 'Recent'}</span>
+                      </div>
+                      <p className="text-xs text-[#6b6560] mt-0.5">{ev.remark}</p>
+                      {ev.location && <span className="text-[10px] text-[#9490b8] font-medium mt-0.5 block">📍 {ev.location}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-[#faf8f4] border border-gray-200 rounded-2xl p-6 text-center space-y-2">
+                <Package size={28} className="mx-auto text-[#9490b8]" />
+                <h4 className="text-xs font-bold text-[#1e1b4b]">Pickup Scheduled</h4>
+                <p className="text-[11px] text-[#6b6560]">
+                  Courier partner has been assigned and pickup is scheduled. Live checkpoint scans will appear once the parcel is scanned at the hub.
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={() => { setTrackingModalOrder(null); setTrackingData(null); }}
+              className="w-full bg-gray-100 text-gray-700 font-bold rounded-xl py-3 text-xs hover:bg-gray-200 cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PRODUCT & PRICING TIERS MODAL */}
+      {editProductModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white rounded-3xl p-6 md:p-8 space-y-6 relative border border-gray-200 shadow-2xl">
+            <button 
+              onClick={() => setEditProductModal(null)} 
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <X size={20}/>
+            </button>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-full">
+                Edit Product & Pricing
+              </span>
+              <h3 className="text-xl font-bold font-display text-[#1e1b4b] mt-2">
+                Edit Listing & Co-Buying Tiers
+              </h3>
+              <p className="text-xs text-[#6b6560] mt-0.5 font-semibold">
+                Update product title, SKU, description, master stock, or change tier discount prices.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">Product Name</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">SKU Reference</label>
+                  <input
+                    type="text"
+                    value={editSku}
+                    onChange={(e) => setEditSku(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#12100e] uppercase">Description</label>
+                <textarea
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] text-[#9490b8] font-bold uppercase">Tracking Code / AWB Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 192830293022"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2.5 px-3.5 text-xs text-[#1e1b4b] font-mono"
-                  required
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">Master Stock Quantity</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editStock}
+                    onChange={(e) => setEditStock(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">Max Group Size</label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="100"
+                    value={editMaxGroupSize}
+                    onChange={(e) => setEditMaxGroupSize(e.target.value)}
+                    className="w-full bg-[#f8f7ff] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#12100e] focus:outline-none focus:border-[#5b21b6]"
+                  />
+                </div>
+              </div>
+
+              {/* Co-Buying Pricing Tiers Edit */}
+              <div className="space-y-3 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#12100e] uppercase">
+                    Co-Buying Pricing Tiers
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddEditTier}
+                    className="text-[10px] font-bold text-[#5b21b6] bg-[rgba(91,33,182,0.08)] px-2.5 py-1 rounded-lg hover:bg-[rgba(91,33,182,0.15)] transition-colors cursor-pointer"
+                  >
+                    + Add Tier
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#9490b8]">
+                  Tier 1 is Solo Price (Size = 1). Larger group sizes should have lower discounted prices.
+                </p>
+
+                <div className="space-y-2">
+                  {editTiers.map((tier, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-[#faf8f4] p-2.5 rounded-xl border border-gray-100">
+                      <div className="w-28">
+                        <span className="text-[9px] font-bold text-[#9490b8] uppercase block">
+                          {idx === 0 ? 'Solo (1 User)' : `Team Size`}
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={idx === 0 ? 1 : tier.group_size}
+                          readOnly={idx === 0}
+                          onChange={(e) => handleEditTierChange(idx, 'group_size', e.target.value)}
+                          placeholder="e.g. 5"
+                          className={`w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-bold text-center ${
+                            idx === 0 ? 'text-gray-400 cursor-not-allowed bg-gray-50' : 'text-[#12100e]'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="flex-1">
+                        <span className="text-[9px] font-bold text-[#9490b8] uppercase block">
+                          Price per unit (₹)
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          step="0.01"
+                          value={tier.price}
+                          onChange={(e) => handleEditTierChange(idx, 'price', e.target.value)}
+                          placeholder="e.g. 999"
+                          className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-bold text-[#5b21b6] focus:outline-none focus:border-[#5b21b6]"
+                        />
+                      </div>
+
+                      {idx > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEditTier(idx)}
+                          className="text-red-500 hover:text-red-700 p-1 mt-3"
+                          title="Remove Tier"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setEditProductModal(null)}
+                className="flex-1 bg-gray-100 text-gray-700 font-bold rounded-xl py-3 text-xs hover:bg-gray-200 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditProduct}
+                disabled={editSubmitting}
+                className="flex-1 bg-[#5b21b6] text-white font-bold rounded-xl py-3 text-xs flex items-center justify-center gap-2 hover:bg-[#4338ca] disabled:opacity-50 cursor-pointer shadow-md shadow-violet-500/20"
+              >
+                {editSubmitting ? <RefreshCw className="animate-spin" size={14} /> : <Check size={14} />}
+                {editSubmitting ? 'Saving Changes...' : 'Save Product Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Official GST Tax Invoice Modal */}
+      {invoiceModalOrder && (
+        <InvoiceModal
+          order={invoiceModalOrder}
+          onClose={() => setInvoiceModalOrder(null)}
+        />
+      )}
+
+      {/* Seller Return Action Modal (Approve / Reject) */}
+      {returnActionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100">
+            <h3 className="text-base font-bold text-[#1e1b4b] mb-1">
+              {returnActionModal.action === 'approve' ? 'Approve Customer Return' : 'Reject Customer Return'}
+            </h3>
+            <p className="text-xs text-[#6b6560] mb-4">
+              Order #{returnActionModal.returnReq.order_id} · {returnActionModal.returnReq.product_name}
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-[#6b6560] uppercase mb-1">
+                  {returnActionModal.action === 'approve' ? 'Instructions for Customer (Optional)' : 'Rejection Reason Note *'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={returnActionModal.note}
+                  onChange={e => setReturnActionModal({ ...returnActionModal, note: e.target.value })}
+                  placeholder={returnActionModal.action === 'approve' ? 'e.g. Please keep item in original packaging with tags intact.' : 'Explain why this return cannot be accepted...'}
+                  className="w-full text-xs p-3 rounded-xl border border-gray-200 bg-[#f8f7ff] focus:outline-none focus:border-[#5b21b6]"
                 />
               </div>
 
-              <div className="flex gap-3 pt-4">
+              {returnActionModal.action === 'approve' && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 text-xs">
+                  ✅ <strong>Inventory Restock:</strong> Approving this return will schedule pickup and automatically replenish your stock quantity by {returnActionModal.returnReq.quantity || 1} unit(s).
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShippingOrderId(null)}
-                  className="flex-1 bg-white/5 border border-[rgba(99,102,241,0.15)] text-[#1e1b4b] rounded-xl py-2.5 text-xs font-semibold hover:bg-white/10 cursor-pointer"
+                  onClick={() => setReturnActionModal(null)}
+                  disabled={returnActionSubmitting}
+                  className="flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-xl text-xs hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
-                  type="submit"
-                  disabled={shippingSubmitting}
-                  className="flex-1 bg-brand-cyan text-white rounded-xl py-2.5 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer hover:opacity-90 disabled:opacity-50"
+                  type="button"
+                  onClick={handleSellerActOnReturn}
+                  disabled={returnActionSubmitting || (returnActionModal.action === 'reject' && !returnActionModal.note.trim())}
+                  className={`flex-1 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer disabled:opacity-50 ${
+                    returnActionModal.action === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
+                  }`}
                 >
-                  {shippingSubmitting ? 'Submitting...' : 'Ship Order'}
+                  {returnActionSubmitting ? 'Submitting...' : returnActionModal.action === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -1396,6 +3159,10 @@ export default function SellerPanel() {
         <div className="mobile-bottom-nav lg:hidden">
           {[
             { tab: 'orders', icon: ShoppingCart, label: 'Orders' },
+            { tab: 'inventory', icon: Package, label: 'Stock' },
+            { tab: 'payments', icon: TrendingUp, label: 'Payouts' },
+            { tab: 'returns', icon: RotateCcw, label: 'Returns' },
+            { tab: 'tickets', icon: LifeBuoy, label: 'Help' },
             { tab: 'add-product', icon: PlusCircle, label: 'Add' },
             { tab: 'profile', icon: User, label: 'Profile' },
           ].map((item) => (
@@ -1404,8 +3171,8 @@ export default function SellerPanel() {
               onClick={() => setActiveTab(item.tab)}
               className={`mobile-nav-btn ${activeTab === item.tab ? 'active' : ''}`}
             >
-              <item.icon size={20} />
-              <span>{item.label}</span>
+              <item.icon size={18} />
+              <span className="text-[9px]">{item.label}</span>
               <div className="mobile-nav-dot" />
             </button>
           ))}
