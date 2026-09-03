@@ -65,8 +65,8 @@ export const createPaymentOrder = async (req, res) => {
     const unitPrice = parseFloat(tier.price);
     const totalAmount = unitPrice; // quantity is 1 for group buys
 
-    // Fetch product details for seller mapping
-    const productRes = await pool.query('SELECT seller_id, category_id FROM products WHERE id = $1', [finalProductId]);
+    // Fetch product details for seller mapping and delivery fee
+    const productRes = await pool.query('SELECT seller_id, category_id, COALESCE(delivery_fee, 0.00) as delivery_fee FROM products WHERE id = $1', [finalProductId]);
     const product = productRes.rows[0];
     if (!product) {
       return res.status(404).json({ error: 'Product not found' });
@@ -95,6 +95,10 @@ export const createPaymentOrder = async (req, res) => {
         }
     }
 
+    // Add admin-configured delivery fee to the final amount (if any)
+    const deliveryFee = parseFloat(product.delivery_fee || 0);
+    finalAmount = +(finalAmount + deliveryFee).toFixed(2);
+
     // 3. Call Razorpay API to create order (Pre-Auth hold mode: payment_capture = 0)
     let razorpayOrder;
     if (isRazorpayMock) {
@@ -103,7 +107,7 @@ export const createPaymentOrder = async (req, res) => {
         amount: Math.round(finalAmount * 100),
         currency: 'INR'
       };
-      console.log(`[MOCK RAZORPAY ORDER] Created: ${razorpayOrder.id} | Amount: ${finalAmount}`);
+      console.log(`[MOCK RAZORPAY ORDER] Created: ${razorpayOrder.id} | Amount: ${finalAmount} (Delivery fee: ${deliveryFee})`);
     } else {
       razorpayOrder = await razorpay.orders.create({
         amount: Math.round(finalAmount * 100), // in Paise
@@ -118,8 +122,8 @@ export const createPaymentOrder = async (req, res) => {
 
     // 4. Create pending order in PostgreSQL database
     const insertOrderQuery = `
-      INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, razorpay_order_id, is_cod, shipping_address, delivery_pincode, coupon_code, variant_id, color, size)
-      VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'pending', $8, false, $9, $10, $11, $12, $13, $14)
+      INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, razorpay_order_id, is_cod, shipping_address, delivery_pincode, coupon_code, variant_id, color, size, shipping_charges)
+      VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'pending', $8, false, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `;
     const orderResult = await pool.query(insertOrderQuery, [
@@ -136,7 +140,8 @@ export const createPaymentOrder = async (req, res) => {
       appliedCouponCode,
       variant_id || null,
       color || null,
-      size || null
+      size || null,
+      deliveryFee
     ]);
 
     return res.status(201).json({
@@ -447,6 +452,7 @@ export const createCodOrder = async (req, res) => {
 
     const productRes = await client.query(`
       SELECT p.seller_id, p.category_id, COALESCE(p.weight_kg, 0.50) as weight_kg,
+             COALESCE(p.delivery_fee, 0.00) as delivery_fee,
              sp.pickup_pincode
       FROM products p
       LEFT JOIN seller_profiles sp ON p.seller_id = sp.user_id
@@ -495,7 +501,7 @@ export const createCodOrder = async (req, res) => {
           appliedCouponCode = coupon.code;
           let discount = 0;
           if (coupon.discount_type === 'flat') {
-            discount = parseFloat(coupon.discount_value);
+              discount = parseFloat(coupon.discount_value);
           } else if (coupon.discount_type === 'pct') {
             discount = (unitPrice * parseFloat(coupon.discount_value)) / 100;
           }
@@ -506,6 +512,10 @@ export const createCodOrder = async (req, res) => {
         }
       }
     }
+
+    // Add admin-configured delivery fee
+    const deliveryFee = parseFloat(product.delivery_fee || 0);
+    finalAmount = +(finalAmount + deliveryFee).toFixed(2);
 
     // 2. COD Order creation (Status set to 'confirmed' directly because it skips pre-auth)
     // 3. Update Group Buying State
@@ -525,8 +535,8 @@ export const createCodOrder = async (req, res) => {
 
       // Create confirmed order
       const insertOrderQuery = `
-        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, delivery_pincode, coupon_code, variant_id, color, size)
-        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12, $13)
+        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, delivery_pincode, coupon_code, variant_id, color, size, shipping_charges)
+        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
       `;
       const orderRes = await client.query(insertOrderQuery, [
@@ -542,7 +552,8 @@ export const createCodOrder = async (req, res) => {
         appliedCouponCode,
         variant_id || null,
         color || null,
-        size || null
+        size || null,
+        deliveryFee
       ]);
 
       // Decrement stock for COD
@@ -588,8 +599,8 @@ export const createCodOrder = async (req, res) => {
       await client.query('UPDATE groups SET current_size = $1 WHERE id = $2', [updatedSize, group_id]);
 
       const insertOrderQuery = `
-        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, delivery_pincode, coupon_code, variant_id, color, size)
-        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12, $13)
+        INSERT INTO orders (group_id, buyer_id, seller_id, product_id, quantity, unit_price, total_amount, commission_pct, status, is_cod, shipping_address, delivery_pincode, coupon_code, variant_id, color, size, shipping_charges)
+        VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'confirmed', true, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
       `;
       const orderRes = await client.query(insertOrderQuery, [
@@ -605,7 +616,8 @@ export const createCodOrder = async (req, res) => {
         appliedCouponCode,
         variant_id || null,
         color || null,
-        size || null
+        size || null,
+        deliveryFee
       ]);
 
       // Decrement stock for COD

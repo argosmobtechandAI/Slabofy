@@ -10,6 +10,7 @@ import {
   getPendingProducts,
   approveProduct,
   rejectProduct,
+  updateProductDeliveryFee,
   createCoupon,
   getCoupons,
   deleteCoupon,
@@ -37,10 +38,11 @@ router.get('/sellers', getSellers);
 router.put('/sellers/:id/approve', approveSeller);
 router.put('/sellers/:id/suspend', suspendSeller);
 
-// Product Queue approvals
+// Product Queue approvals & delivery fee management
 router.get('/products', getPendingProducts);
 router.put('/products/:id/approve', approveProduct);
 router.put('/products/:id/reject', rejectProduct);
+router.put('/products/:id/delivery-fee', updateProductDeliveryFee);
 
 // Coupons management
 router.post('/coupons', createCoupon);

@@ -7,7 +7,8 @@ import {
   Store, Tag, Plus, PlusCircle, ShoppingCart, RefreshCw, AlertTriangle, ArrowRight, 
   ShieldCheck, CheckCircle2, Truck, HelpCircle, User, Lock, Trash2, X, UploadCloud, 
   Video, Users, Menu, TrendingUp, Clock, Package, DollarSign, CreditCard, Layers, 
-  Download, Check, LifeBuoy, MessageSquare, Search, Edit3, Phone, Mail, FileText
+  Download, Check, LifeBuoy, MessageSquare, Search, Edit3, Phone, Mail, FileText,
+  RotateCcw
 } from 'lucide-react';
 import { Navigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -189,6 +190,12 @@ export default function SellerPanel() {
   const [invoiceModalOrder, setInvoiceModalOrder] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
 
+  // Return Requests State
+  const [sellerReturns, setSellerReturns] = useState([]);
+  const [returnsLoading, setReturnsLoading] = useState(false);
+  const [returnActionModal, setReturnActionModal] = useState(null);
+  const [returnActionSubmitting, setReturnActionSubmitting] = useState(false);
+
   // Security Form State
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -203,6 +210,7 @@ export default function SellerPanel() {
       fetchCategories();
       if (activeTab === 'inventory') fetchInventory();
       if (activeTab === 'tickets') fetchMyTickets();
+      if (activeTab === 'returns') fetchSellerReturns();
     } else {
       setLoading(false);
     }
@@ -834,6 +842,7 @@ export default function SellerPanel() {
       case 'orders': return 'Shipment Orders';
       case 'inventory': return 'Inventory & Stock Management';
       case 'payments': return 'Payments & Earnings Ledger';
+      case 'returns': return 'Customer Return Requests';
       case 'tickets': return 'Seller Support Helpdesk';
       case 'add-product': return 'Add New Product';
       case 'profile': return 'Profile Settings';
@@ -845,6 +854,7 @@ export default function SellerPanel() {
     { tab: 'orders', icon: ShoppingCart, label: 'Shipment Orders' },
     { tab: 'inventory', icon: Package, label: 'Inventory & Stock' },
     { tab: 'payments', icon: TrendingUp, label: 'Payments & Payouts' },
+    { tab: 'returns', icon: RotateCcw, label: 'Returns & Refunds' },
     { tab: 'tickets', icon: LifeBuoy, label: 'Support Helpdesk' },
     { tab: 'add-product', icon: PlusCircle, label: 'Add New Product' },
     { tab: 'profile', icon: User, label: 'Profile Settings' },
@@ -1620,6 +1630,156 @@ export default function SellerPanel() {
                         </tr>
                       );
                     })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: RETURNS & REFUNDS */}
+      {activeTab === 'returns' && (
+        <div key={activeTab} className="space-y-6 animate-tab-morph max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Customer Return Requests</h2>
+              <p className="text-xs text-[#6b6560] mt-0.5">Manage customer return requests, approve pickups, and track refund eligibility within the 7-day policy.</p>
+            </div>
+            <button
+              onClick={fetchSellerReturns}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-colors self-start cursor-pointer"
+            >
+              <RefreshCw size={13} className={returnsLoading ? 'animate-spin' : ''} /> Refresh
+            </button>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border border-[rgba(99,102,241,0.1)] rounded-2xl p-4 shadow-sm">
+              <span className="text-[11px] font-bold text-[#6b6560] uppercase tracking-wider block">Total Returns</span>
+              <strong className="text-xl font-display font-extrabold text-[#12100e] block mt-1">{sellerReturns.length}</strong>
+            </div>
+            <div className="bg-amber-50/70 border border-amber-200/60 rounded-2xl p-4 shadow-sm">
+              <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider block">Needs Action</span>
+              <strong className="text-xl font-display font-extrabold text-amber-900 block mt-1">
+                {sellerReturns.filter(r => r.status === 'requested').length}
+              </strong>
+            </div>
+            <div className="bg-blue-50/70 border border-blue-200/60 rounded-2xl p-4 shadow-sm">
+              <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">Pickup Scheduled</span>
+              <strong className="text-xl font-display font-extrabold text-blue-900 block mt-1">
+                {sellerReturns.filter(r => r.status === 'seller_approved').length}
+              </strong>
+            </div>
+            <div className="bg-emerald-50/70 border border-emerald-200/60 rounded-2xl p-4 shadow-sm">
+              <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">100% Refunded</span>
+              <strong className="text-xl font-display font-extrabold text-emerald-900 block mt-1">
+                {sellerReturns.filter(r => r.status === 'refunded').length}
+              </strong>
+            </div>
+          </div>
+
+          {/* Returns Table */}
+          <div className="table-container-v2">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <span className="text-xs font-bold text-[#1e1b4b]">Return Cases List</span>
+              <span className="text-[11px] text-[#9490b8] font-semibold">{sellerReturns.length} Total</span>
+            </div>
+
+            {returnsLoading ? (
+              <div className="p-12 text-center text-xs text-[#9490b8] flex flex-col items-center justify-center gap-2">
+                <RefreshCw size={24} className="animate-spin text-[#5b21b6]" />
+                <span>Loading return requests...</span>
+              </div>
+            ) : sellerReturns.length === 0 ? (
+              <div className="p-12 text-center text-xs text-[#9490b8]">
+                <RotateCcw size={32} className="mx-auto mb-2 text-gray-300" />
+                <strong className="text-sm font-bold text-[#12100e] block mb-1">No Return Requests Found</strong>
+                <span>All customer orders are in good standing with zero returns pending.</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50/50">
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Order & Date</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Product</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Customer</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Return Reason</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Refund Value</th>
+                      <th className="py-3 px-5 text-xs font-bold text-[#6b6560]">Status & Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-xs">
+                    {sellerReturns.map(ret => (
+                      <tr key={ret.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-4 px-5">
+                          <span className="font-mono text-xs font-bold text-[#5b21b6] block">#ORD-{ret.order_id}</span>
+                          <span className="text-[10px] text-[#9490b8] block mt-0.5">
+                            {new Date(ret.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        </td>
+                        <td className="py-4 px-5">
+                          <strong className="text-xs font-bold text-[#12100e] block line-clamp-1">{ret.product_name}</strong>
+                          <span className="text-[10px] text-[#6b6560]">SKU: {ret.product_sku || 'N/A'}</span>
+                        </td>
+                        <td className="py-4 px-5">
+                          <span className="text-xs font-semibold text-[#12100e] block">{ret.buyer_name}</span>
+                          <span className="text-[10px] text-[#6b6560] block">{ret.buyer_phone}</span>
+                        </td>
+                        <td className="py-4 px-5 max-w-[220px]">
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase mb-1">
+                            {ret.reason.replace(/_/g, ' ')}
+                          </span>
+                          {ret.description && (
+                            <p className="text-[11px] text-[#6b6560] line-clamp-2">{ret.description}</p>
+                          )}
+                          {ret.seller_note && (
+                            <p className="text-[10px] text-[#5b21b6] font-semibold mt-1">Your note: {ret.seller_note}</p>
+                          )}
+                        </td>
+                        <td className="py-4 px-5">
+                          <strong className="text-xs font-black text-[#12100e] block">{formatCurrency(ret.refund_amount)}</strong>
+                          <span className="text-[9px] text-[#059669] font-bold">100% Full Refund</span>
+                        </td>
+                        <td className="py-4 px-5">
+                          {ret.status === 'requested' ? (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setReturnActionModal({ returnReq: ret, action: 'approve', note: '' })}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1.5 rounded-lg text-[11px] cursor-pointer transition-colors shadow-sm"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => setReturnActionModal({ returnReq: ret, action: 'reject', note: '' })}
+                                className="border border-red-300 text-red-600 hover:bg-red-50 font-bold px-2.5 py-1.5 rounded-lg text-[11px] cursor-pointer transition-colors"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : ret.status === 'seller_approved' ? (
+                            <button
+                              onClick={() => handleMarkPickupDone(ret.id)}
+                              className="bg-[#4338ca] hover:bg-[#3730a3] text-white font-bold px-2.5 py-1.5 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                            >
+                              <Truck size={12} /> Confirm Pickup
+                            </button>
+                          ) : (
+                            <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
+                              ret.status === 'refunded' ? 'bg-emerald-100 text-emerald-800' :
+                              ret.status === 'pickup_done' ? 'bg-blue-100 text-blue-800' :
+                              ret.status === 'seller_rejected' ? 'bg-red-100 text-red-800' :
+                              ret.status === 'admin_approved' ? 'bg-purple-100 text-purple-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {ret.status.replace(/_/g, ' ')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -2863,6 +3023,62 @@ export default function SellerPanel() {
         />
       )}
 
+      {/* Seller Return Action Modal (Approve / Reject) */}
+      {returnActionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100">
+            <h3 className="text-base font-bold text-[#1e1b4b] mb-1">
+              {returnActionModal.action === 'approve' ? 'Approve Customer Return' : 'Reject Customer Return'}
+            </h3>
+            <p className="text-xs text-[#6b6560] mb-4">
+              Order #{returnActionModal.returnReq.order_id} · {returnActionModal.returnReq.product_name}
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-[#6b6560] uppercase mb-1">
+                  {returnActionModal.action === 'approve' ? 'Instructions for Customer (Optional)' : 'Rejection Reason Note *'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={returnActionModal.note}
+                  onChange={e => setReturnActionModal({ ...returnActionModal, note: e.target.value })}
+                  placeholder={returnActionModal.action === 'approve' ? 'e.g. Please keep item in original packaging with tags intact.' : 'Explain why this return cannot be accepted...'}
+                  className="w-full text-xs p-3 rounded-xl border border-gray-200 bg-[#f8f7ff] focus:outline-none focus:border-[#5b21b6]"
+                />
+              </div>
+
+              {returnActionModal.action === 'approve' && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 text-xs">
+                  ✅ <strong>Inventory Restock:</strong> Approving this return will schedule pickup and automatically replenish your stock quantity by {returnActionModal.returnReq.quantity || 1} unit(s).
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setReturnActionModal(null)}
+                  disabled={returnActionSubmitting}
+                  className="flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-xl text-xs hover:bg-gray-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSellerActOnReturn}
+                  disabled={returnActionSubmitting || (returnActionModal.action === 'reject' && !returnActionModal.note.trim())}
+                  className={`flex-1 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer disabled:opacity-50 ${
+                    returnActionModal.action === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
+                  }`}
+                >
+                  {returnActionSubmitting ? 'Submitting...' : returnActionModal.action === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
           </div>
         </div>
         </div>
@@ -2872,6 +3088,7 @@ export default function SellerPanel() {
             { tab: 'orders', icon: ShoppingCart, label: 'Orders' },
             { tab: 'inventory', icon: Package, label: 'Stock' },
             { tab: 'payments', icon: TrendingUp, label: 'Payouts' },
+            { tab: 'returns', icon: RotateCcw, label: 'Returns' },
             { tab: 'tickets', icon: LifeBuoy, label: 'Help' },
             { tab: 'add-product', icon: PlusCircle, label: 'Add' },
             { tab: 'profile', icon: User, label: 'Profile' },

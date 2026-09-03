@@ -5,7 +5,8 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import {
   ShoppingBag, Users, Truck, ShieldCheck, RefreshCw,
-  Package, Clock, CheckCircle, ChevronRight, LogOut, FileText, Share2, Copy, Lock, Trash2, X, AlertTriangle, User
+  Package, Clock, CheckCircle, ChevronRight, LogOut, FileText, Share2, Copy, Lock, Trash2, X, AlertTriangle, User,
+  RotateCcw, XCircle, AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useScrollReveal from '../hooks/useScrollReveal';
@@ -84,6 +85,15 @@ export default function MyOrders() {
   // Invoice Modal State
   const [invoiceModalOrder, setInvoiceModalOrder] = useState(null);
 
+  // Return & Cancellation States
+  const [buyerReturns, setBuyerReturns] = useState({});
+  const [cancelModalOrder, setCancelModalOrder] = useState(null);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [returnModalOrder, setReturnModalOrder] = useState(null);
+  const [returnReason, setReturnReason] = useState('defective_item');
+  const [returnDescription, setReturnDescription] = useState('');
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+
   // Security Form State
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -117,10 +127,56 @@ export default function MyOrders() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/auth/orders');
-      setOrders(res.data.orders || []);
+      const [ordersRes, returnsRes] = await Promise.all([
+        api.get('/auth/orders'),
+        api.get('/returns/my').catch(() => ({ data: { returns: [] } }))
+      ]);
+      setOrders(ordersRes.data.orders || []);
+      const retMap = {};
+      (returnsRes.data.returns || []).forEach(r => { retMap[r.order_id] = r; });
+      setBuyerReturns(retMap);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!cancelModalOrder) return;
+    setCancelSubmitting(true);
+    try {
+      const res = await api.post(`/returns/cancel/${cancelModalOrder.id}`);
+      toast.success(res.data.message || 'Order cancelled and 100% full refund initiated!');
+      setCancelModalOrder(null);
+      await fetchOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to cancel order');
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
+  const handleSubmitReturn = async (e) => {
+    e.preventDefault();
+    if (!returnModalOrder) return;
+    setReturnSubmitting(true);
+    try {
+      const res = await api.post('/returns', {
+        order_id: returnModalOrder.id,
+        reason: returnReason,
+        description: returnDescription
+      });
+      toast.success(res.data.message || 'Return request submitted successfully!');
+      setReturnModalOrder(null);
+      await fetchOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to submit return request');
+    } finally {
+      setReturnSubmitting(false);
+    }
+  };
+
+  const isWithinReturnWindow = (order) => {
+    const daysOld = (Date.now() - new Date(order.created_at).getTime()) / (1000 * 60 * 60 * 24);
+    return daysOld <= 7;
   };
 
   const handleOpenTrackingModal = async (order) => {
@@ -428,6 +484,102 @@ export default function MyOrders() {
                       >
                         <FileText size={13} /> View / Print Tax Invoice
                       </button>
+
+                      {/* Active Return Status Banner */}
+                      {buyerReturns[order.id] && (
+                        <div style={{
+                          marginTop: 6,
+                          padding: '10px 12px',
+                          borderRadius: 12,
+                          background: 'rgba(245, 158, 11, 0.08)',
+                          border: '1px solid rgba(245, 158, 11, 0.25)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#b45309', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <RotateCcw size={13} />
+                              Return: {buyerReturns[order.id].status.replace('_', ' ')}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#059669' }}>
+                              {fmt(buyerReturns[order.id].refund_amount)} (100% Refund)
+                            </span>
+                          </div>
+                          {buyerReturns[order.id].seller_note && (
+                            <span style={{ fontSize: '0.68rem', color: '#6b6560' }}>
+                              Merchant: {buyerReturns[order.id].seller_note}
+                            </span>
+                          )}
+                          {buyerReturns[order.id].admin_note && (
+                            <span style={{ fontSize: '0.68rem', color: '#6b6560' }}>
+                              Admin: {buyerReturns[order.id].admin_note}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Customer Cancel Button (Pre-Dispatch Only) */}
+                      {!buyerReturns[order.id] && ['pending', 'confirmed'].includes(order.status) && !order.awb_code && (
+                        <button
+                          type="button"
+                          onClick={() => setCancelModalOrder(order)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            padding: '8px 14px',
+                            borderRadius: 12,
+                            border: '1.5px solid rgba(239, 68, 68, 0.25)',
+                            background: '#ffffff',
+                            color: '#ef4444',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            marginTop: 2
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.06)'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                          title="Cancel order before courier dispatch for instant 100% refund"
+                        >
+                          <XCircle size={13} /> Cancel Order
+                        </button>
+                      )}
+
+                      {/* Customer Return Button (Delivered/Shipped, within 7 days) */}
+                      {!buyerReturns[order.id] && ['delivered', 'shipped'].includes(order.status) && isWithinReturnWindow(order) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReturnModalOrder(order);
+                            setReturnReason('defective_item');
+                            setReturnDescription('');
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            padding: '8px 14px',
+                            borderRadius: 12,
+                            border: '1.5px solid rgba(245, 158, 11, 0.3)',
+                            background: '#ffffff',
+                            color: '#b45309',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            marginTop: 2
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(245, 158, 11, 0.06)'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                          title="Request return within strict 7-day delivery policy"
+                        >
+                          <RotateCcw size={13} /> Request Return (7 Days)
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -613,6 +765,123 @@ export default function MyOrders() {
           order={invoiceModalOrder} 
           onClose={() => setInvoiceModalOrder(null)} 
         />
+      )}
+
+      {/* Cancel Order Confirmation Modal */}
+      {cancelModalOrder && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(18,16,14,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 24, maxWidth: 440, width: '100%', padding: '32px', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(239,68,68,0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <XCircle size={28} />
+            </div>
+            <h3 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.2rem', textAlign: 'center', color: '#12100e', marginBottom: 8 }}>
+              Cancel Order #{cancelModalOrder.id}?
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: '#6b6560', textAlign: 'center', marginBottom: 20, lineHeight: 1.6 }}>
+              Are you sure you want to cancel this order? Since it has not been dispatched yet, a <strong>100% full refund of {fmt(cancelModalOrder.total_amount)}</strong> will be automatically initiated to your original payment method.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setCancelModalOrder(null)}
+                disabled={cancelSubmitting}
+                style={{ flex: 1, padding: '12px', borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', color: '#64748b' }}
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelOrder}
+                disabled={cancelSubmitting}
+                style={{ flex: 1, padding: '12px', borderRadius: 12, border: 'none', background: '#ef4444', color: '#fff', fontWeight: 700, fontSize: '0.82rem', cursor: cancelSubmitting ? 'not-allowed' : 'pointer', opacity: cancelSubmitting ? 0.7 : 1 }}
+              >
+                {cancelSubmitting ? 'Cancelling...' : 'Yes, Cancel & Refund'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Return Request Modal */}
+      {returnModalOrder && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(18,16,14,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 24, maxWidth: 500, width: '100%', padding: '32px', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(245,158,11,0.1)', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <RotateCcw size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800, fontSize: '1.1rem', color: '#12100e' }}>
+                    Request Return & 100% Refund
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Order #{returnModalOrder.id} · 7-Day Policy</span>
+                </div>
+              </div>
+              <button onClick={() => setReturnModalOrder(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitReturn} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  Reason for Return *
+                </label>
+                <select
+                  value={returnReason}
+                  onChange={e => setReturnReason(e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '0.82rem', color: '#0f172a', background: '#f8fafc' }}
+                  required
+                >
+                  <option value="defective_item">Defective or damaged item</option>
+                  <option value="wrong_item_delivered">Wrong item delivered</option>
+                  <option value="item_not_as_described">Item not as described / shown</option>
+                  <option value="size_fit_issue">Size / fit issue</option>
+                  <option value="damaged_in_transit">Package damaged in transit</option>
+                  <option value="missing_parts">Missing accessories / parts</option>
+                  <option value="changed_mind">Changed mind / no longer needed</option>
+                  <option value="other">Other reason</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  Detailed Description
+                </label>
+                <textarea
+                  rows={3}
+                  value={returnDescription}
+                  onChange={e => setReturnDescription(e.target.value)}
+                  placeholder="Please describe the issue in detail to help the seller process your pickup..."
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '0.82rem', color: '#0f172a', background: '#f8fafc', resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ background: 'rgba(5,150,105,0.06)', border: '1px solid rgba(5,150,105,0.2)', borderRadius: 12, padding: '12px', fontSize: '0.75rem', color: '#065f46' }}>
+                🛡️ <strong>100% Refund Guarantee:</strong> Once approved and collected by our courier partner, a 100% full refund of <strong>{fmt(returnModalOrder.total_amount)}</strong> will be credited to your account.
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setReturnModalOrder(null)}
+                  disabled={returnSubmitting}
+                  style={{ flex: 1, padding: '12px', borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', color: '#64748b' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={returnSubmitting}
+                  style={{ flex: 1, padding: '12px', borderRadius: 12, border: 'none', background: '#5b21b6', color: '#fff', fontWeight: 700, fontSize: '0.82rem', cursor: returnSubmitting ? 'not-allowed' : 'pointer', opacity: returnSubmitting ? 0.7 : 1 }}
+                >
+                  {returnSubmitting ? 'Submitting...' : 'Submit Return Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

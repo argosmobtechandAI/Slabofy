@@ -18,7 +18,13 @@ BEGIN
         CREATE TYPE group_status AS ENUM ('active', 'complete', 'expired', 'cancelled');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
-        CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded');
+        CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded', 'return_requested');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'return_status') THEN
+        CREATE TYPE return_status AS ENUM ('requested', 'seller_approved', 'seller_rejected', 'admin_approved', 'admin_rejected', 'pickup_done', 'refunded', 'closed');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'return_reason') THEN
+        CREATE TYPE return_reason AS ENUM ('defective_item', 'wrong_item_delivered', 'item_not_as_described', 'size_fit_issue', 'changed_mind', 'damaged_in_transit', 'missing_parts', 'other');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'preauth_status') THEN
         CREATE TYPE preauth_status AS ENUM ('authorized', 'captured', 'voided');
@@ -87,6 +93,7 @@ CREATE TABLE IF NOT EXISTS products (
     length_cm DECIMAL(6,2) DEFAULT 10.00,
     breadth_cm DECIMAL(6,2) DEFAULT 10.00,
     height_cm DECIMAL(6,2) DEFAULT 5.00,
+    delivery_fee DECIMAL(10,2) DEFAULT 0.00,
     status product_status DEFAULT 'pending',
     reject_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -314,7 +321,33 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_seller ON support_tickets(seller_
 CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
 
 -- ------------------------------------------------------------------------------
--- 15. SEED DATA (Default Categories, Admin User & Sample Catalog)
+-- 15. RETURN REQUESTS TABLE
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS return_requests (
+    id SERIAL PRIMARY KEY,
+    order_id INT REFERENCES orders(id) ON DELETE CASCADE NOT NULL UNIQUE,
+    buyer_id INT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+    seller_id INT REFERENCES users(id) ON DELETE SET NULL,
+    status return_status DEFAULT 'requested',
+    reason return_reason NOT NULL,
+    description TEXT,
+    evidence_images JSONB DEFAULT '[]'::jsonb,
+    seller_note TEXT,
+    admin_note TEXT,
+    refund_amount DECIMAL(10,2) NOT NULL,
+    razorpay_refund_id VARCHAR(255),
+    refunded_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_return_requests_order ON return_requests(order_id);
+CREATE INDEX IF NOT EXISTS idx_return_requests_buyer ON return_requests(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_return_requests_seller ON return_requests(seller_id);
+CREATE INDEX IF NOT EXISTS idx_return_requests_status ON return_requests(status);
+
+-- ------------------------------------------------------------------------------
+-- 16. SEED DATA (Default Categories, Admin User & Sample Catalog)
 -- ------------------------------------------------------------------------------
 
 -- Seed Categories

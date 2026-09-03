@@ -91,15 +91,21 @@ export default function Checkout() {
     setCouponCode('');
   };
 
+  const getDeliveryFee = () => {
+    return parseFloat(product?.delivery_fee || 0);
+  };
+
   const getDiscountedTotal = () => {
-    if (!appliedCoupon) return selectedPrice;
-    if (appliedCoupon.discount_type === 'flat') {
-      return Math.max(1, selectedPrice - appliedCoupon.discount_value);
-    } else if (appliedCoupon.discount_type === 'pct') {
-      const discount = (selectedPrice * appliedCoupon.discount_value) / 100;
-      return Math.max(1, selectedPrice - discount);
+    let base = selectedPrice;
+    if (appliedCoupon) {
+      if (appliedCoupon.discount_type === 'flat') {
+        base = Math.max(1, selectedPrice - appliedCoupon.discount_value);
+      } else if (appliedCoupon.discount_type === 'pct') {
+        const discount = (selectedPrice * appliedCoupon.discount_value) / 100;
+        base = Math.max(1, selectedPrice - discount);
+      }
     }
-    return selectedPrice;
+    return base + getDeliveryFee();
   };
 
   useEffect(() => {
@@ -600,7 +606,11 @@ export default function Checkout() {
                 {[
                   { label: `Unit price (${target_size} size tier)`, value: formatCurrency(selectedPrice) },
                   { label: 'Quantity', value: '1 unit' },
-                  { label: 'Shipping Fee', value: 'FREE', highlight: '#059669' },
+                  { 
+                    label: 'Delivery Charges', 
+                    value: getDeliveryFee() === 0 ? 'FREE' : formatCurrency(getDeliveryFee()), 
+                    highlight: getDeliveryFee() === 0 ? '#059669' : '#12100e' 
+                  },
                 ].map(({ label, value, highlight }) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.8rem', color: '#6b6560' }}>{label}</span>

@@ -239,10 +239,12 @@ export const getPendingProducts = async (req, res) => {
 
 export const approveProduct = async (req, res) => {
   const { id } = req.params;
+  const { delivery_fee } = req.body;
   try {
+    const fee = delivery_fee !== undefined && !isNaN(parseFloat(delivery_fee)) ? Math.max(0, parseFloat(delivery_fee)) : 0.00;
     const result = await pool.query(
-      "UPDATE products SET status = 'active', reject_reason = NULL WHERE id = $1 RETURNING *",
-      [id]
+      "UPDATE products SET status = 'active', delivery_fee = $1, reject_reason = NULL WHERE id = $2 RETURNING *",
+      [fee, id]
     );
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Product not found' });
@@ -251,6 +253,28 @@ export const approveProduct = async (req, res) => {
   } catch (error) {
     console.error('Error in approveProduct:', error.message);
     return res.status(500).json({ error: 'Server error approving product' });
+  }
+};
+
+export const updateProductDeliveryFee = async (req, res) => {
+  const { id } = req.params;
+  const { delivery_fee } = req.body;
+  if (delivery_fee === undefined || isNaN(parseFloat(delivery_fee))) {
+    return res.status(400).json({ error: 'Valid delivery fee amount is required' });
+  }
+  try {
+    const fee = Math.max(0, parseFloat(delivery_fee));
+    const result = await pool.query(
+      "UPDATE products SET delivery_fee = $1 WHERE id = $2 RETURNING *",
+      [fee, id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    return res.status(200).json({ message: 'Delivery fee updated successfully', product: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating delivery fee:', error.message);
+    return res.status(500).json({ error: 'Server error updating delivery fee' });
   }
 };
 

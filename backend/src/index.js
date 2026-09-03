@@ -11,6 +11,7 @@ import couponRoutes from './routes/coupons.js';
 import uploadRoutes from './routes/upload.js';
 import shiprocketRoutes from './routes/shiprocket.js';
 import ticketRoutes from './routes/tickets.js';
+import returnsRoutes from './routes/returns.js';
 import { getCategories } from './controllers/admin.js';
 import path from 'path';
 import { initExpiryCron } from './cron/expiry.js';
@@ -52,6 +53,7 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/shiprocket', shiprocketRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/returns', returnsRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

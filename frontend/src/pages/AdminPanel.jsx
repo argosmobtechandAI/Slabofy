@@ -7,7 +7,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { 
   ShieldAlert, BarChart3, FolderHeart, Users, ListFilter, Percent, 
   Trash2, Check, X, RefreshCw, Plus, Calendar, AlertTriangle, ShieldCheck, Tag, Info, Package, Lock, Menu, TrendingUp, Clock, CheckCircle2,
-  LifeBuoy, HelpCircle, MessageSquare, Phone, Mail, FileText
+  LifeBuoy, HelpCircle, MessageSquare, Phone, Mail, FileText, RotateCcw, Truck, DollarSign
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -47,6 +47,16 @@ export default function AdminPanel() {
   const [rejectProductId, setRejectProductId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
+
+  // Delivery Fees State (Admin Only)
+  const [productDeliveryFees, setProductDeliveryFees] = useState({});
+
+  // Admin Returns & Refunds State
+  const [adminReturns, setAdminReturns] = useState([]);
+  const [adminReturnsLoading, setAdminReturnsLoading] = useState(false);
+  const [refundModalReturn, setRefundModalReturn] = useState(null);
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [refundNote, setRefundNote] = useState('');
 
   // Security Form States
   const [currentPassword, setCurrentPassword] = useState('');
@@ -92,6 +102,8 @@ export default function AdminPanel() {
         if (ticketFilterCat !== 'all') url += `category=${ticketFilterCat}&`;
         const tktRes = await api.get(url);
         setTickets(tktRes.data.tickets || []);
+      } else if (activeTab === 'returns') {
+        fetchAdminReturns();
       }
     } catch (err) {
       console.error(err);
@@ -167,9 +179,52 @@ export default function AdminPanel() {
   };
 
   // PRODUCT OPERATIONS
+  const fetchAdminReturns = async () => {
+    setAdminReturnsLoading(true);
+    try {
+      const res = await api.get('/returns/admin');
+      setAdminReturns(res.data.returns || []);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load return requests');
+    } finally {
+      setAdminReturnsLoading(false);
+    }
+  };
+
+  const handleAdminReturnAction = async (id, action) => {
+    try {
+      await api.put(`/returns/admin/${id}`, { action });
+      toast.success(`Return request updated to ${action}`);
+      fetchAdminReturns();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Action failed');
+    }
+  };
+
+  const handleProcessRefund = async (e) => {
+    e.preventDefault();
+    if (!refundModalReturn) return;
+    setRefundSubmitting(true);
+    try {
+      const res = await api.post(`/returns/admin/${refundModalReturn.id}/refund`, {
+        note: refundNote
+      });
+      toast.success(res.data.message || '100% full refund processed successfully!');
+      setRefundModalReturn(null);
+      setRefundNote('');
+      fetchAdminReturns();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to process refund');
+    } finally {
+      setRefundSubmitting(false);
+    }
+  };
+
   const handleApproveProduct = async (id) => {
     try {
-      await api.put(`/admin/products/${id}/approve`);
+      const fee = productDeliveryFees[id] !== undefined ? productDeliveryFees[id] : 0;
+      await api.put(`/admin/products/${id}/approve`, { delivery_fee: fee });
       toast.success('Product listing approved and activated!');
       fetchAdminData();
     } catch (err) {
@@ -278,6 +333,7 @@ export default function AdminPanel() {
       case 'coupons': return 'Escrow Coupons';
       case 'customers': return 'Customer Database';
       case 'orders': return 'Platform Orders';
+      case 'returns': return 'Returns & Refunds Oversight';
       case 'tickets': return 'Seller Support Tickets';
       case 'security': return 'Security Settings';
       default: return 'Admin Portal';
@@ -292,6 +348,7 @@ export default function AdminPanel() {
     { tab: 'coupons', icon: Percent, label: 'Escrow Coupons' },
     { tab: 'customers', icon: Users, label: 'Customer Database' },
     { tab: 'orders', icon: Package, label: 'Platform Orders' },
+    { tab: 'returns', icon: RotateCcw, label: 'Returns & Refunds' },
     { tab: 'tickets', icon: LifeBuoy, label: 'Support Tickets' },
     { tab: 'security', icon: Lock, label: 'Security' },
   ];
@@ -705,6 +762,26 @@ export default function AdminPanel() {
                               </div>
                             ))}
                           </div>
+                        </div>
+
+                        {/* Delivery Fee Configuration (Admin Only) */}
+                        <div className="bg-[#f8f7ff] border border-[rgba(99,102,241,0.1)] rounded-xl p-3 flex flex-col justify-center gap-1 w-full lg:w-48">
+                          <label className="text-[10px] font-bold text-[#6b6560] uppercase tracking-wider block">
+                            Delivery Fee (₹)
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-[#5b21b6]">₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              placeholder="0 (Free Delivery)"
+                              value={productDeliveryFees[prod.id] !== undefined ? productDeliveryFees[prod.id] : (prod.delivery_fee || '')}
+                              onChange={(e) => setProductDeliveryFees({ ...productDeliveryFees, [prod.id]: e.target.value })}
+                              className="w-full text-xs font-bold text-[#1e1b4b] bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#5b21b6]"
+                            />
+                          </div>
+                          <span className="text-[8.5px] text-[#9490b8] leading-tight">Charged at checkout. Hidden from seller.</span>
                         </div>
 
                         {/* Right: Actions */}
@@ -1212,6 +1289,154 @@ export default function AdminPanel() {
               </div>
             )}
 
+            {/* RETURNS & REFUNDS OVERSIGHT */}
+            {activeTab === 'returns' && (
+              <div key={activeTab} className="space-y-6 animate-tab-morph max-w-7xl">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold font-display text-[#1e1b4b]">Returns & Refunds Oversight</h2>
+                    <p className="text-xs text-[#6b6560] mt-0.5">Admin master queue to review return claims, override merchant disputes, and trigger 100% Razorpay refunds.</p>
+                  </div>
+                  <button
+                    onClick={fetchAdminReturns}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-colors self-start cursor-pointer"
+                  >
+                    <RefreshCw size={13} className={adminReturnsLoading ? 'animate-spin' : ''} /> Refresh
+                  </button>
+                </div>
+
+                {/* Return Statistics */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white border border-[rgba(99,102,241,0.1)] rounded-2xl p-4 shadow-sm">
+                    <span className="text-[11px] font-bold text-[#6b6560] uppercase tracking-wider block">Total Return Claims</span>
+                    <strong className="text-xl font-display font-extrabold text-[#12100e] block mt-1">{adminReturns.length}</strong>
+                  </div>
+                  <div className="bg-amber-50/70 border border-amber-200/60 rounded-2xl p-4 shadow-sm">
+                    <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider block">Pending Review</span>
+                    <strong className="text-xl font-display font-extrabold text-amber-900 block mt-1">
+                      {adminReturns.filter(r => ['requested', 'seller_rejected'].includes(r.status)).length}
+                    </strong>
+                  </div>
+                  <div className="bg-blue-50/70 border border-blue-200/60 rounded-2xl p-4 shadow-sm">
+                    <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">Pickup In Progress</span>
+                    <strong className="text-xl font-display font-extrabold text-blue-900 block mt-1">
+                      {adminReturns.filter(r => ['seller_approved', 'admin_approved', 'pickup_done'].includes(r.status)).length}
+                    </strong>
+                  </div>
+                  <div className="bg-emerald-50/70 border border-emerald-200/60 rounded-2xl p-4 shadow-sm">
+                    <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">100% Refund Disbursed</span>
+                    <strong className="text-xl font-display font-extrabold text-emerald-900 block mt-1">
+                      {adminReturns.filter(r => r.status === 'refunded').length}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Returns Table */}
+                <div className="glass-panel border-[rgba(99,102,241,0.1)] rounded-3xl p-6 shadow-xl">
+                  {adminReturnsLoading ? (
+                    <div className="p-12 text-center text-xs text-[#9490b8] flex flex-col items-center justify-center gap-2">
+                      <RefreshCw size={24} className="animate-spin text-[#5b21b6]" />
+                      <span>Loading return queue...</span>
+                    </div>
+                  ) : adminReturns.length === 0 ? (
+                    <div className="p-12 text-center text-xs text-[#9490b8]">
+                      <RotateCcw size={32} className="mx-auto mb-2 text-gray-300" />
+                      <strong className="text-sm font-bold text-[#12100e] block mb-1">Zero Return Requests</strong>
+                      <span>All customer transactions and fulfillments are healthy.</span>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-100 bg-gray-50/50">
+                            <th className="py-3 px-4 text-xs font-bold text-[#6b6560]">Order & Date</th>
+                            <th className="py-3 px-4 text-xs font-bold text-[#6b6560]">Buyer</th>
+                            <th className="py-3 px-4 text-xs font-bold text-[#6b6560]">Seller</th>
+                            <th className="py-3 px-4 text-xs font-bold text-[#6b6560]">Product & Reason</th>
+                            <th className="py-3 px-4 text-xs font-bold text-[#6b6560]">Refund Value</th>
+                            <th className="py-3 px-4 text-xs font-bold text-[#6b6560]">Lifecycle Status</th>
+                            <th className="py-3 px-4 text-xs font-bold text-[#6b6560] text-right">Admin Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-xs">
+                          {adminReturns.map(ret => (
+                            <tr key={ret.id} className="hover:bg-gray-50/80 transition-colors">
+                              <td className="py-4 px-4">
+                                <span className="font-mono text-xs font-bold text-[#5b21b6] block">#ORD-{ret.order_id}</span>
+                                <span className="text-[10px] text-[#9490b8]">
+                                  {new Date(ret.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4">
+                                <strong className="text-[#12100e] block">{ret.buyer_name}</strong>
+                                <span className="text-[10px] text-[#6b6560]">{ret.buyer_phone}</span>
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className="text-[#12100e] font-semibold block">{ret.seller_business_name || 'Direct Merchant'}</span>
+                              </td>
+                              <td className="py-4 px-4 max-w-[200px]">
+                                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase mb-1">
+                                  {ret.reason.replace(/_/g, ' ')}
+                                </span>
+                                <p className="text-[11px] text-[#6b6560] line-clamp-1">{ret.product_name}</p>
+                                {ret.description && <p className="text-[10px] text-[#9490b8] italic line-clamp-1">"{ret.description}"</p>}
+                                {ret.seller_note && <p className="text-[10px] text-[#b45309] font-medium mt-0.5">Seller: {ret.seller_note}</p>}
+                                {ret.admin_note && <p className="text-[10px] text-[#5b21b6] font-medium mt-0.5">Admin: {ret.admin_note}</p>}
+                              </td>
+                              <td className="py-4 px-4">
+                                <strong className="text-xs font-black text-[#12100e] block">{formatCurrency(ret.refund_amount)}</strong>
+                                <span className="text-[10px] font-semibold text-[#6b6560]">
+                                  {ret.is_cod ? 'Cash on Delivery' : 'Prepaid Online'}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
+                                  ret.status === 'refunded' ? 'bg-emerald-100 text-emerald-800' :
+                                  ret.status === 'pickup_done' ? 'bg-blue-100 text-blue-800' :
+                                  ret.status === 'seller_approved' ? 'bg-indigo-100 text-indigo-800' :
+                                  ret.status === 'seller_rejected' ? 'bg-rose-100 text-rose-800' :
+                                  ret.status === 'admin_approved' ? 'bg-purple-100 text-purple-800' :
+                                  'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {ret.status.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  {ret.status === 'seller_rejected' && (
+                                    <button
+                                      onClick={() => handleAdminReturnAction(ret.id, 'approve')}
+                                      className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-2.5 py-1 rounded-lg text-[10px] cursor-pointer transition-colors"
+                                      title="Override seller rejection and approve return"
+                                    >
+                                      Force Approve
+                                    </button>
+                                  )}
+
+                                  {ret.status !== 'refunded' && ret.status !== 'closed' && (
+                                    <button
+                                      onClick={() => setRefundModalReturn(ret)}
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                                    >
+                                      <DollarSign size={11} /> 100% Refund
+                                    </button>
+                                  )}
+
+                                  {ret.status === 'refunded' && (
+                                    <span className="text-[10px] font-bold text-emerald-600">Disbursed ✓</span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* SECURITY SETTINGS */}
             {activeTab === 'security' && (
               <div className="max-w-2xl animate-fade-in space-y-6">
@@ -1298,6 +1523,97 @@ export default function AdminPanel() {
                   className="flex-1 bg-red-500 text-white rounded-xl py-2.5 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer hover:opacity-90 disabled:opacity-50"
                 >
                   {rejectSubmitting ? 'Submitting...' : 'Reject Product'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN PROCESS 100% REFUND MODAL */}
+      {refundModalReturn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 md:p-8 space-y-5 relative border border-[rgba(99,102,241,0.15)] shadow-2xl bg-white">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-[#5b21b6] tracking-wider block">Financial Settlement</span>
+                <h3 className="text-lg font-bold font-display text-[#1e1b4b]">
+                  Process 100% Full Refund
+                </h3>
+              </div>
+              <button 
+                onClick={() => setRefundModalReturn(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-[#f8f7ff] rounded-2xl p-4 border border-[rgba(99,102,241,0.1)] space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-[#6b6560]">Order ID:</span>
+                <strong className="font-mono text-[#5b21b6]">#ORD-{refundModalReturn.order_id}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6b6560]">Customer:</span>
+                <span className="text-[#12100e] font-semibold">{refundModalReturn.buyer_name} ({refundModalReturn.buyer_phone})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6b6560]">Product:</span>
+                <span className="text-[#12100e] font-semibold line-clamp-1">{refundModalReturn.product_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6b6560]">Payment Method:</span>
+                <span className="font-bold text-[#1e1b4b]">{refundModalReturn.is_cod ? 'Cash on Delivery (COD)' : 'Prepaid (Razorpay Online)'}</span>
+              </div>
+              <div className="flex justify-between border-t border-gray-200/60 pt-2 mt-2">
+                <span className="text-[#12100e] font-bold">100% Refund Amount:</span>
+                <strong className="text-base font-black text-emerald-600 font-display">
+                  {formatCurrency(refundModalReturn.refund_amount)}
+                </strong>
+              </div>
+            </div>
+
+            {refundModalReturn.is_cod ? (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-xs">
+                ⚠️ <strong>Manual Bank Transfer Required:</strong> This was a Cash on Delivery order. No online Razorpay capture exists to reverse. Contact the customer at <strong>{refundModalReturn.buyer_phone}</strong> to verify their UPI/Bank account details and record the disbursement below.
+              </div>
+            ) : (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl p-3 text-xs">
+                ⚡ <strong>Instant Gateway Reversal:</strong> Clicking below will invoke the Razorpay Refund API to immediately return 100% of funds to the customer's original card / UPI account.
+              </div>
+            )}
+
+            <form onSubmit={handleProcessRefund} className="space-y-4">
+              <div>
+                <label className="text-[10px] text-[#6b6560] font-bold uppercase block mb-1">
+                  Admin Audit Note / Reference ID
+                </label>
+                <input
+                  type="text"
+                  placeholder={refundModalReturn.is_cod ? 'e.g. Disbursed via IMPS UTR 4829482910' : 'e.g. Quality check passed; 100% refund released'}
+                  value={refundNote}
+                  onChange={(e) => setRefundNote(e.target.value)}
+                  className="w-full bg-[#f8f7ff] border border-[rgba(99,102,241,0.15)] rounded-xl py-2.5 px-3.5 text-xs text-[#1e1b4b] placeholder-[#b4b0d0] focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setRefundModalReturn(null)}
+                  disabled={refundSubmitting}
+                  className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-2.5 text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={refundSubmitting}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md shadow-emerald-500/20"
+                >
+                  <DollarSign size={14} />
+                  {refundSubmitting ? 'Processing 100% Refund...' : refundModalReturn.is_cod ? 'Confirm Bank Disbursement' : 'Execute 100% Razorpay Refund'}
                 </button>
               </div>
             </form>
