@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
 
+import ErrorBoundary from './components/ErrorBoundary';
+
 // Layout components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -27,35 +29,38 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#faf8f4', color: '#12100e' }}>
-          
-          <Routes>
-            {/* Main Website Layout */}
-            <Route element={
-              <>
-                <Navbar />
-                <main style={{ flexGrow: 1 }}>
-                  <Outlet />
-                </main>
-                <Footer />
-              </>
-            }>
-              <Route path="/"            element={<Home />} />
-              <Route path="/product/:id" element={<ProductDetail />} />
-              <Route path="/checkout"    element={<Checkout />} />
-              <Route path="/group/:id"   element={<GroupRoom />} />
-              <Route path="/join/:id"    element={<GroupInvite />} />
-              <Route path="/orders"      element={<MyOrders />} />
-              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="/terms-of-service" element={<TermsOfService />} />
-              <Route path="/refund-policy" element={<RefundPolicy />} />
-            </Route>
+          <ErrorBoundary>
+            <Routes>
+              {/* Main Website Layout */}
+              <Route element={
+                <>
+                  <Navbar />
+                  <main style={{ flexGrow: 1 }}>
+                    <ErrorBoundary>
+                      <Outlet />
+                    </ErrorBoundary>
+                  </main>
+                  <Footer />
+                </>
+              }>
+                <Route path="/"            element={<Home />} />
+                <Route path="/product/:id" element={<ProductDetail />} />
+                <Route path="/checkout"    element={<Checkout />} />
+                <Route path="/group/:id"   element={<GroupRoom />} />
+                <Route path="/join/:id"    element={<GroupInvite />} />
+                <Route path="/orders"      element={<MyOrders />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/terms-of-service" element={<TermsOfService />} />
+                <Route path="/refund-policy" element={<RefundPolicy />} />
+              </Route>
 
-            {/* Separate Admin & Seller URLs without Main Navbar/Footer */}
-            <Route path="/seller/login" element={<SellerLogin />} />
-            <Route path="/seller"       element={<SellerPanel />} />
-            <Route path="/admin/login"  element={<AdminLogin />} />
-            <Route path="/admin"        element={<AdminPanel />} />
-          </Routes>
+              {/* Separate Admin & Seller URLs without Main Navbar/Footer */}
+              <Route path="/seller/login" element={<SellerLogin />} />
+              <Route path="/seller"       element={<SellerPanel />} />
+              <Route path="/admin/login"  element={<AdminLogin />} />
+              <Route path="/admin"        element={<AdminPanel />} />
+            </Routes>
+          </ErrorBoundary>
 
           <Toaster
             position="top-right"

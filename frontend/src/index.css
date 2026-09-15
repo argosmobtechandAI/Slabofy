@@ -6,7 +6,7 @@
    Aesthetic: Warm Cream × Deep Indigo × Vivid Coral
    Style: Editorial · Kinetic · Luxe
 ════════════════════════════════════════════════════════════ */
-
+/* Tailwind CSS v4 Theme Configuration */
 @theme {
   --font-sans:    'Inter',             system-ui, sans-serif;
   --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -1024,3 +1024,45 @@ html, body {
     transform: none !important;
   }
 }
+
+/* ════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVENESS ENHANCEMENTS
+════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  .group-buy-card {
+    padding: 18px 16px !important;
+    border-radius: 20px !important;
+  }
+  .product-action-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .product-action-row .btn-start-team {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    order: 1;
+  }
+  .product-action-row .btn-share-team {
+    flex: 1 1 auto !important;
+    order: 2;
+  }
+  .product-action-row .btn-wishlist {
+    flex: 0 0 auto !important;
+    order: 3;
+  }
+  .lightbox-arrow {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  .lightbox-arrow svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .tilt-card {
+    border-radius: 20px !important;
+  }
+}
+
